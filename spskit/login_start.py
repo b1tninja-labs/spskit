@@ -30,6 +30,8 @@ _BEGIN = "/common/SAS/BeginAuth"
 _PROCESS = "/common/SAS/ProcessAuth"
 _KMSI = "/kmsi"
 _COOKIE_NAME = re.compile(r"^[A-Za-z0-9_]{1,40}$")
+_LABEL = re.compile(r"[A-Za-z0-9_.-]{1,64}")
+_PATH = re.compile(r"/[A-Za-z0-9_./-]{0,120}")
 _UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 
@@ -325,24 +327,38 @@ def submit_email_code(
     if page is None:
         status, raw = _post_redirect(settings, exchange, text, settings.ciam + _PROCESS)
         if status != 200:
-            raise LoginError(f"the email code was refused ({status})")
-        page = parse_page_config(raw.decode("utf-8", errors="replace"))
+            raise LoginError(f"the email code was refused ({status})\n{describe_sign_in_page(text, status)}")
+        text = raw.decode("utf-8", errors="replace")
+        page = parse_page_config(text)
+    detail = describe_sign_in_page(text, status)
     if page is None:
-        raise LoginError("the sign-in host rejected that code")
+        raise LoginError(f"the sign-in host rejected that code\n{detail}")
     if _error_code(page) == "InvalidOneTimePasscode":
         raise CodeRejectedError(_next_challenge(challenge, page))
+    session_id = _text(page, "sessionId")
+    ctx = _text(page, "sCtx")
+    flow = _text(page, "sFT")
+    canary = _text(page, "canary") or _text(page, "apiCanary")
+    missing = [
+        name
+        for name, value in (("sCtx", ctx), ("sessionId", session_id), ("sFT", flow), ("canary", canary))
+        if not value
+    ]
+    if missing:
+        raise LoginError(f"the email code was not accepted\n{detail}; missing {','.join(missing)}")
     kmsi = [
         ("LoginOptions", "1"),
         ("type", "28"),
-        ("ctx", _text(page, "sCtx")),
-        ("hpgrequestid", _text(page, "sessionId")),
-        ("flowToken", _text(page, "sFT")),
-        ("canary", _text(page, "canary") or _text(page, "apiCanary")),
+        ("ctx", ctx),
+        ("hpgrequestid", session_id),
+        ("flowToken", flow),
+        ("canary", canary),
         ("i19", "0"),
     ]
-    if not all(value for name, value in kmsi if name != "i19"):
-        raise LoginError("the email code was not accepted")
-    url = _kmsi_url(settings, page)
+    try:
+        url = _kmsi_url(settings, page)
+    except LoginError as exc:
+        raise LoginError(f"the email code was not accepted\n{detail}") from exc
     if on_stay is not None:
         on_stay(url, kmsi)
     return post_stay_signed_in(settings, url, kmsi, exchange)
@@ -443,6 +459,54 @@ def _begin_url(settings: Settings, config: Mapping[str, object]) -> str:
     if urllib.parse.urlsplit(url).path.rstrip("/") != _BEGIN:
         raise LoginError("the sign-in host did not ask for an email code")
     return url
+
+
+def describe_sign_in_page(html_text: str, status: int) -> str:
+    """A one-line description of a sign-in page. Tokens, codes, and the account name are left out."""
+    page = _page_object(html_text) or {}
+    bits = [f"status {status}"]
+    title = _page_title(html_text)
+    if title:
+        bits.append(f"title {title}")
+    for key in ("pgid", "sErrorCode", "stsErrorCode"):
+        shown = _label(page.get(key))
+        if shown:
+            bits.append(f"{key} {shown}")
+    posted = page.get("urlPost")
+    path = _post_path(posted) if isinstance(posted, str) else ""
+    if path:
+        bits.append(f"urlPost {path}")
+    present = [
+        name for name in ("sFT", "sCtx", "sessionId", "correlationId", "canary", "apiCanary") if _text(page, name)
+    ]
+    bits.append("fields " + (",".join(present) if present else "none"))
+    return "; ".join(bits)
+
+
+def _page_title(html_text: str) -> str:
+    match = re.search(r"<title>([^<]{1,80})</title>", html_text, re.IGNORECASE)
+    if match is None:
+        return ""
+    title = " ".join(match.group(1).split())
+    if "@" in title or re.fullmatch(r"[A-Za-z0-9 ,.'-]{1,80}", title) is None:
+        return ""
+    return title
+
+
+def _label(value: object) -> str:
+    if isinstance(value, bool):
+        return ""
+    text = str(value) if isinstance(value, int) else value if isinstance(value, str) else ""
+    if _LABEL.fullmatch(text) is None:
+        return ""
+    return text
+
+
+def _post_path(url: str) -> str:
+    path = urllib.parse.urlsplit(url).path if "://" in url else url
+    if _PATH.fullmatch(path) is None or ".." in path:
+        return ""
+    return path
 
 
 def _kmsi_url(settings: Settings, config: Mapping[str, object]) -> str:

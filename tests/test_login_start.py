@@ -263,6 +263,45 @@ def test_a_rejected_code_is_asked_again_without_a_new_email(tmp_path, capsys):
     assert saved["access_token"] == TOKEN
 
 
+def test_a_page_that_is_not_stay_signed_in_names_itself(tmp_path):
+    settings = Settings(
+        "person@example.com",
+        "current-secret",
+        "https://gateway.example",
+        "https://ciam.example",
+        "",
+        tmp_path,
+    )
+    requested = EmailRequest(
+        MfaChallenge(8, "flow-after-begin", "ctx-after-begin", "form-canary", "corr-begin", "person@example.com"),
+        "b" * 43,
+    )
+    body = """<html><title>Sign in to your account</title><script>$Config={"sFT":"flow-secret-value",
+"sCtx":"ctx-secret","canary":"canary-secret","sessionId":"sess-1","correlationId":"corr-1",
+"pgid":"OtherPage","sErrorCode":"50011","urlPost":"/common/SAS/ProcessAuth",
+"sErrTxt":"person@example.com abcd1234"};</script><!-- abcd1234 flow-secret-value --></html>"""
+
+    def exchange(_method, url, _body, _headers):
+        assert url.endswith("/ProcessAuth")
+        return 200, body.encode()
+
+    with pytest.raises(LoginError, match="pgid OtherPage") as caught:
+        submit_email_code(settings, requested, "abcd1234", exchange)
+    message = str(caught.value)
+    assert "sErrorCode 50011" in message
+    assert "urlPost /common/SAS/ProcessAuth" in message
+    assert "title Sign in to your account" in message
+    for secret in (
+        "abcd1234",
+        "flow-secret-value",
+        "ctx-secret",
+        "canary-secret",
+        "person@example.com",
+        "current-secret",
+    ):
+        assert secret not in message
+
+
 def test_a_page_without_a_flow_token_is_skipped():
     assert parse_page_config("<html>$Config={};</html>") is None
     assert _page(PAGE)["sFT"] == "flow-token-value-0001"
