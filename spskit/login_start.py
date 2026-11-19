@@ -301,9 +301,15 @@ def submit_email_code(settings: Settings, requested: EmailRequest, code: str, ex
     del fields
     if status != 200:
         raise LoginError(f"the email code was refused ({status})")
-    page = parse_page_config(raw.decode("utf-8", errors="replace"))
+    text = raw.decode("utf-8", errors="replace")
+    page = parse_page_config(text)
     if page is None:
-        raise LoginError("the email code was not accepted")
+        status, raw = _post_redirect(settings, exchange, text, settings.ciam + _PROCESS)
+        if status != 200:
+            raise LoginError(f"the email code was refused ({status})")
+        page = parse_page_config(raw.decode("utf-8", errors="replace"))
+    if page is None or _error_code(page) == "InvalidOneTimePasscode":
+        raise LoginError("the sign-in host rejected that code")
     kmsi = [
         ("LoginOptions", "1"),
         ("type", "28"),

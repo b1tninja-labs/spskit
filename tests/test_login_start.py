@@ -9,7 +9,9 @@ import pytest
 from spskit.cli import run
 from spskit.config import Settings
 from spskit.login_start import (
+    EmailRequest,
     LoginError,
+    MfaChallenge,
     _load_config,
     parse_page_config,
     redirect_location,
@@ -122,6 +124,51 @@ def test_a_password_redirect_is_posted_back_with_sso_reload(tmp_path):
     requested = request_email_code(settings, exchange)
     assert requested.challenge.code_length == 8
     assert any("sso_reload=true" in url for _method, url in seen)
+
+
+def test_the_code_post_follows_the_redirect_before_it_is_judged(tmp_path):
+    settings = Settings(
+        "person@example.com",
+        "current-secret",
+        "https://gateway.example",
+        "https://ciam.example",
+        "",
+        tmp_path,
+    )
+    requested = EmailRequest(
+        MfaChallenge(8, "flow-after-begin", "ctx-after-begin", "form-canary", "corr-begin", "person@example.com"),
+        "b" * 43,
+    )
+    interrupt = """
+<html><title>Redirecting</title><script>$Config={"stsErrorCode":"50168",
+"urlPost":"/common/SAS/ProcessAuth","oPostParams":{"otc":"abcd1234","canary":"form-canary",
+"flowToken":"flow-after-begin","request":"ctx-after-begin","login":"person@example.com",
+"hpgrequestid":"corr-begin","mfaAuthMethod":"Email"},
+"bsso":{"cookieNames":{"ssoPulled":"SSOCOOKIEPULLED"}}};</script></html>
+"""
+
+    def exchange(method, url, body, headers):
+        assert method == "POST"
+        if url.endswith("/ProcessAuth") and "sso_reload" not in url:
+            assert parse_qs(body.decode())["otc"] == ["abcd1234"]
+            assert parse_qs(body.decode())["mfaAuthMethod"] == ["Email"]
+            return 200, interrupt.encode()
+        if "sso_reload=true" in url:
+            assert headers["cookie"] == "SSOCOOKIEPULLED=1"
+            assert parse_qs(body.decode())["otc"] == ["abcd1234"]
+            return 200, KMSI.encode()
+        assert url.endswith("/kmsi")
+        return 302, REDIRECT.encode()
+
+    assert submit_email_code(settings, requested, "abcd1234", exchange) == REDIRECT
+
+    def rejected(_method, url, _body, _headers):
+        if "sso_reload=true" in url:
+            return 200, MFA.replace('"sErrorCode":"50074"', '"sErrorCode":"InvalidOneTimePasscode"').encode()
+        return 200, interrupt.encode()
+
+    with pytest.raises(LoginError, match="rejected"):
+        submit_email_code(settings, requested, "abcd1234", rejected)
 
 
 def test_a_page_without_a_flow_token_is_skipped():

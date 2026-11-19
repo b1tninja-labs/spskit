@@ -26,7 +26,10 @@ A success is `Success` true, `ErrCode` 0 and `ResultValue` `Success`, with a new
 The code length on that page is `iEmailOtcLength` (8). The command then waits for the person to type it.
 
 `POST /common/SAS/ProcessAuth` sends `otc`, `canary`, `flowToken`, `request`, `login`, `hpgrequestid`
-and `mfaAuthMethod` `Email`. The next page is `KmsiInterrupt` (`sErrorCode` `50140`, `urlPost` `/kmsi`).
+and `mfaAuthMethod` `Email`. That response is the Redirecting page again (`stsErrorCode` `50168`),
+and its `oPostParams` include `otc`. Posting that form to `urlPost` with `sso_reload=true` and the
+`ssoPulled` cookie returns the next page. A rejected code is page `FabricTFA` with `sErrorCode`
+`InvalidOneTimePasscode`. An accepted code is `KmsiInterrupt` (`sErrorCode` `50140`, `urlPost` `/kmsi`).
 `POST /kmsi` sends `LoginOptions=1`, `type=28`, `ctx`, `hpgrequestid`, `flowToken`, `canary` and `i19`.
 The response is a 302 whose `Location` is `https://www.acdelcotds.com/#code=...`.
 
