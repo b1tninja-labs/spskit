@@ -253,11 +253,35 @@ def open_backend_session(settings: Settings, access_token: str, exchange: Exchan
     """POST an empty body. The profile document in the response is not kept."""
     zone = urllib.parse.quote(settings.zone, safe="")
     url = f"{settings.backend}/api/v1/login?zoneId={zone}"
-    status, _raw = exchange(
+    site = urllib.parse.urlsplit(settings.redirect_uri)
+    origin = f"{site.scheme}://{site.netloc}"
+    status, raw = exchange(
         "POST",
         url,
-        None,
-        {"X-EEID-Access-Token": access_token, "accept": "application/json"},
+        b"",
+        {
+            "X-EEID-Access-Token": access_token,
+            "Accept": "application/json, text/plain, */*",
+            "Origin": origin,
+            "Referer": origin + "/",
+        },
     )
     if status != 200:
-        raise SessionExpiredError(f"TDS login was refused ({status})")
+        raise SessionExpiredError(f"TDS login was refused ({status}; {_backend_error(raw)})")
+
+
+def _backend_error(raw: bytes) -> str:
+    """A short error name from the backend. A token or a profile is not included."""
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError:
+        return "not json"
+    if not isinstance(payload, dict):
+        return "not an object"
+    for key in ("error", "message", "title", "code"):
+        value = payload.get(key)
+        if isinstance(value, int):
+            return str(value)
+        if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9 _.:-]{1,80}", value) and value.count(".") < 2:
+            return value
+    return "no error code"

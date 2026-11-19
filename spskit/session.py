@@ -66,12 +66,27 @@ def _write_object(path: Path, payload: dict[str, object]) -> None:
     destination.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
 
-def write_session(path: Path, token: str) -> None:
+def write_session(path: Path, token: str, *, backend_pending: bool = False) -> None:
     """Write the access token. Callers pass a path from `session_path`."""
     kept = accept_token(token)
     payload = _read_object(path)
     payload["access_token"] = kept
+    if backend_pending:
+        payload["backend_pending"] = True
+    else:
+        payload.pop("backend_pending", None)
     _write_object(path, payload)
+
+
+def read_backend_pending(path: Path) -> str | None:
+    """The access token saved before the TDS backend accepted it, when that call still needs a retry."""
+    payload = _read_object(path)
+    if payload.get("backend_pending") is not True:
+        return None
+    token = payload.get("access_token")
+    if not isinstance(token, str):
+        return None
+    return accept_token(token)
 
 
 def write_pending(

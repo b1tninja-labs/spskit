@@ -514,7 +514,8 @@ def test_login_posts_the_password_then_waits_for_the_email_code(tmp_path, capsys
             assert b"abcd1234" not in body
             return 200, json.dumps({"token_type": "Bearer", "access_token": TOKEN}).encode()
         assert url.startswith("https://backend.example/api/v1/login")
-        assert body is None
+        assert body == b""
+        assert headers["Origin"] == "https://www.acdelcotds.com"
         assert headers["X-EEID-Access-Token"] == TOKEN
         return 200, b"{}"
 

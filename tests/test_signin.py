@@ -144,14 +144,16 @@ def test_the_code_is_exchanged_and_the_profile_is_discarded(tmp_path):
                 {"token_type": "Bearer", "access_token": "access-token-value-0001", "refresh_token": "refresh-secret"}
             ).encode()
         assert headers["X-EEID-Access-Token"] == "access-token-value-0001"
-        assert body is None
+        assert headers["Origin"] == "https://www.acdelcotds.com"
+        assert headers["Referer"] == "https://www.acdelcotds.com/"
+        assert body == b""
         assert "zoneId=America%2FLos_Angeles" in url
         return 200, json.dumps({"email": "person@example.com", "phone": "000"}).encode()
 
     access = exchange_authorization_code(settings, REDIRECT, exchange)
     open_backend_session(settings, access, exchange)
     assert access == "access-token-value-0001"
-    assert seen[1][1] is None
+    assert seen[1][1] == b""
 
 
 def test_a_refused_token_names_the_error_and_hides_the_description(tmp_path):
@@ -181,3 +183,25 @@ def test_a_refused_token_names_the_error_and_hides_the_description(tmp_path):
     assert "50148" in message
     assert "AADSTS50148" in message
     assert "secret-authorization-code" not in message
+
+
+def test_a_refused_backend_names_the_error_and_hides_a_token(tmp_path):
+    settings = Settings(
+        username="person",
+        password="stored-password",
+        gateway="https://gateway.example",
+        ciam="https://ciam.example",
+        access_token="",
+        download_dir=tmp_path,
+        code_verifier=VERIFIER,
+    )
+
+    def exchange(_method, url, body, headers):
+        assert "/api/v1/login" in url
+        assert body == b""
+        assert headers["Origin"] == "https://www.acdelcotds.com"
+        return 401, json.dumps({"message": "Unauthorized", "token": "header.payload.signature"}).encode()
+
+    with pytest.raises(SessionExpiredError, match="Unauthorized") as caught:
+        open_backend_session(settings, "access-token-value-0001", exchange)
+    assert "header.payload.signature" not in str(caught.value)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import pathlib
 import subprocess
@@ -8,7 +9,7 @@ import urllib.error
 
 import pytest
 
-from spskit.cli import run, urllib_exchange
+from spskit.cli import _TryingHTTPSConnection, run, urllib_exchange
 from spskit.login_start import LoginError
 from spskit.verify import parse_challenge
 
@@ -85,7 +86,8 @@ def test_token_command_writes_the_token_and_does_not_print_it(tmp_path, capsys):
         if url.endswith("/token"):
             assert b"stored-password" not in body
             return 200, json.dumps({"token_type": "Bearer", "access_token": "access-token-value-0001"}).encode()
-        assert body is None
+        assert body == b""
+        assert headers["Origin"] == "https://www.acdelcotds.com"
         assert headers["X-EEID-Access-Token"] == "access-token-value-0001"
         return 200, b"{}"
 
@@ -190,3 +192,49 @@ def test_a_closed_connection_stops_after_the_backoff(monkeypatch):
     with pytest.raises(LoginError, match="closed the connection"):
         urllib_exchange("GET", "https://ciam.example/login", None, {}, sleeper=delays.append)
     assert delays == [1.0, 2.0, 4.0]
+
+
+def test_the_access_token_header_keeps_its_spelling(monkeypatch):
+    seen: list[object] = []
+
+    def capture(_self: object, header: object, *_values: object) -> None:
+        seen.append(header)
+
+    monkeypatch.setattr(http.client.HTTPSConnection, "putheader", capture)
+    _TryingHTTPSConnection("backend.example").putheader("X-Eeid-Access-Token", "value")
+    assert seen == ["X-EEID-Access-Token"]
+
+
+def test_a_saved_token_retries_the_backend_without_a_new_code(tmp_path, capsys):
+    token_file = tmp_path / "session.json"
+    env = tmp_path / ".env"
+    env.write_text(
+        "SPS_DOWNLOAD_DIR=" + str(tmp_path / "out") + "\nTDS_TOKEN_FILE=" + str(token_file) + "\n",
+        encoding="utf-8",
+    )
+    token_file.write_text(
+        json.dumps(
+            {
+                "access_token": "access-token-value-0001",
+                "backend_pending": True,
+                "stay": {"url": "https://ciam.example/kmsi"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def exchange(method, url, body, headers):
+        assert method == "POST"
+        assert "/api/v1/login" in url
+        assert body == b""
+        assert headers["X-EEID-Access-Token"] == "access-token-value-0001"
+        return 200, b"{}"
+
+    code = run(["--env", str(env), "code"], exchange, lambda _prompt: "nope")
+    assert code == 0
+    saved = json.loads(token_file.read_text(encoding="utf-8"))
+    assert saved["access_token"] == "access-token-value-0001"
+    assert "backend_pending" not in saved
+    assert "stay" not in saved
+    assert "access-token-value-0001" not in capsys.readouterr().out

@@ -57,7 +57,9 @@ for the redirect site, because this public client only redeems a code on a cross
 `access_token` and `refresh_token`. Only the access token is kept.
 
 `POST https://backend.acdelcotds.com/api/v1/login?zoneId=America/Los_Angeles` sends that token in
-`X-EEID-Access-Token` and an empty body. The profile in the response is discarded.
+`X-EEID-Access-Token`, with `Origin` and `Referer` for the TDS site and an empty body. The header is
+sent with that spelling. The profile in the response is discarded. The access token is written before
+this call, so a refused login can be retried without a new email code.
 
 `spskit login` stops after BeginAuth and writes the challenge, the code verifier, and the sign-in
 cookies to the session file. `spskit code` reads that file and posts the typed code. Once the code is

@@ -17,7 +17,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Buffer, Callable, Mapping, Sequence
 from dataclasses import replace
 from http.client import HTTPMessage
 from typing import IO
@@ -49,6 +49,7 @@ from spskit.session import (
     apply_saved_session,
     clear_sign_in,
     prompt_emailed_token,
+    read_backend_pending,
     read_cookies,
     read_pending,
     read_signin,
@@ -105,6 +106,10 @@ class _TryingHTTPSConnection(http.client.HTTPSConnection):
             raise last
         raise OSError(f"no address for {self.host}")
 
+    def putheader(self, header: str | bytes, *values: Buffer | str | int) -> None:
+        text = header.decode("ascii") if isinstance(header, bytes) else header
+        super().putheader(_EXACT_HEADERS.get(text.lower(), text), *values)
+
 
 class _HTTPS(urllib.request.HTTPSHandler):
     def https_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
@@ -136,6 +141,7 @@ _OPENER = urllib.request.build_opener(
 )
 _RETRY_DELAYS = (1.0, 2.0, 4.0)
 _COOKIE_NAME = re.compile(r"^[A-Za-z0-9_]{1,40}$")
+_EXACT_HEADERS = {"x-eeid-access-token": "X-EEID-Access-Token"}
 
 
 def _store_cookie(url: str, header: str) -> None:
@@ -341,6 +347,13 @@ def run(
             return 0
         if args.command == "code":
             path = session_path(settings)
+            pending = read_backend_pending(path)
+            if pending is not None:
+                open_backend_session(settings, pending, exchange)
+                write_session(path, pending)
+                clear_sign_in(path)
+                print(f"wrote the session to {path}")
+                return 0
             _load_cookies(path, exchange)
             stay = read_stay(path)
             if stay is not None:
@@ -373,6 +386,7 @@ def run(
                     break
             settings = replace(settings, code_verifier=verifier)
             access = exchange_authorization_code(settings, redirect, exchange)
+            write_session(path, access, backend_pending=True)
             open_backend_session(settings, access, exchange)
             write_session(path, access)
             clear_sign_in(path)
@@ -387,8 +401,9 @@ def run(
         settings = apply_saved_session(settings)
         if args.command == "token":
             access = exchange_authorization_code(settings, args.redirect, exchange)
-            open_backend_session(settings, access, exchange)
             path = session_path(settings)
+            write_session(path, access, backend_pending=True)
+            open_backend_session(settings, access, exchange)
             write_session(path, access)
             print(f"wrote the session to {path}")
             return 0
