@@ -122,8 +122,12 @@ not stored.
 The download button does not use that list for the installer. It always reads
 `GET /acl/cdl/resources/25/permissions` and posts the first `resourceVersion` to `downloadCredentials`.
 Resource 25 is `TLC Installer`, type `INITIAL_SOFTWARE`, and the grant's filename is `TLCSuite.exe`.
-`spskit downloads` asks for resource 25 and for any other decimal id the search marks runnable.
-`spskit downloads --get` saves every version those permission calls return, under `SPS_DOWNLOAD_DIR`.
+`spskit downloads` unions four lists: resource 25, resource 1, every runnable decimal id from
+`POST /acl/permissions/search`, every decimal id from `GET /acl/cdl/resources/prelaunch`, and every
+version from `GET /acl/cdl/permissions/search`. A UUID is still a page. A version with `disabled`
+true is omitted. `spskit downloads --get` writes each version under
+`SPS_DOWNLOAD_DIR/cache/{id}/{version}/`. A file already in that directory is left in place.
+`spskit downloads --get --refresh` fetches it again.
 
 ## Techline Connect launch
 

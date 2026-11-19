@@ -67,7 +67,8 @@ def test_download_writes_beside_the_given_directory(tmp_path: pathlib.Path):
         return 200, b"module-bytes"
 
     grant = request_grant(settings, MODULE, exchange)
-    fetch_module(settings, grant, exchange)
-    assert (tmp_path / "example.bin").read_bytes() == b"module-bytes"
+    written = fetch_module(settings, MODULE, grant, exchange)
+    assert written == tmp_path / "cache" / "25" / "1.2.3" / "example.bin"
+    assert written.read_bytes() == b"module-bytes"
     with pytest.raises(DownloadError):
         save_bytes(tmp_path, "..\\escape.bin", b"no")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import pathlib
 import re
 import urllib.parse
 from collections.abc import Callable, Mapping
@@ -12,8 +13,9 @@ from spskit.catalog import (
     CatalogError,
     LicensedModule,
     ResourceAccess,
-    download_ids,
+    catalog_ids,
     parse_permissions,
+    parse_prelaunch,
     parse_resource_access,
     resource_id,
 )
@@ -21,9 +23,10 @@ from spskit.config import Settings
 from spskit.download import (
     CREDENTIALS_PATH,
     DownloadGrant,
+    cached_file,
     credentials_body,
     parse_grant,
-    save_bytes,
+    save_cached,
 )
 from spskit.signin import (
     PasswordUpdateRequiredError,
@@ -88,11 +91,68 @@ def search_access(settings: Settings, exchange: Exchange, bearer: str = "") -> l
     return parse_resource_access(_json_body(status, raw))
 
 
+def _present(status: int, raw: bytes) -> Mapping[str, object] | None:
+    if status == 404:
+        return None
+    return _json_body(status, raw)
+
+
+def prelaunch_ids(settings: Settings, exchange: Exchange, bearer: str = "") -> list[str]:
+    """Ids from the update manager's prelaunch catalog. A missing route yields an empty list."""
+    status, raw = exchange(
+        "GET",
+        f"{settings.gateway}/acl/cdl/resources/prelaunch",
+        None,
+        acl_headers(bearer),
+    )
+    payload = _present(status, raw)
+    if payload is None:
+        return []
+    return parse_prelaunch(payload)
+
+
+def required_versions(settings: Settings, exchange: Exchange, bearer: str = "") -> list[LicensedModule]:
+    """Versions from GET /acl/cdl/permissions/search. A missing route yields an empty list."""
+    status, raw = exchange(
+        "GET",
+        f"{settings.gateway}/acl/cdl/permissions/search",
+        None,
+        acl_headers(bearer),
+    )
+    payload = _present(status, raw)
+    if payload is None:
+        return []
+    return parse_permissions(payload)
+
+
+def _versions(settings: Settings, raw_id: str, exchange: Exchange, bearer: str = "") -> list[LicensedModule]:
+    status, raw = exchange("GET", permissions_url(settings, raw_id), None, acl_headers(bearer))
+    payload = _present(status, raw)
+    if payload is None:
+        return []
+    return parse_permissions(payload)
+
+
 def licensed_downloads(settings: Settings, exchange: Exchange, bearer: str = "") -> list[LicensedModule]:
-    """The Techline Connect installer and any other decimal resource this account can run."""
+    """Every licensed file version the gateway will list.
+
+    That is the installer, TUM, each runnable decimal id, each prelaunch decimal id, and the
+    versions from the update manager's permissions search. A disabled version is omitted.
+    """
     modules: list[LicensedModule] = []
-    for raw_id in download_ids(search_access(settings, exchange, bearer)):
-        modules.extend(list_modules(settings, raw_id, exchange, bearer))
+    seen: set[tuple[str, str]] = set()
+
+    def add(found: list[LicensedModule]) -> None:
+        for module in found:
+            key = (module.resource_id, module.version)
+            if key in seen:
+                continue
+            seen.add(key)
+            modules.append(module)
+
+    for raw_id in catalog_ids(search_access(settings, exchange, bearer), prelaunch_ids(settings, exchange, bearer)):
+        add(_versions(settings, raw_id, exchange, bearer))
+    add(required_versions(settings, exchange, bearer))
     return modules
 
 
@@ -104,14 +164,30 @@ def request_grant(settings: Settings, module: LicensedModule, exchange: Exchange
     return parse_grant(_json_body(status, raw))
 
 
-def fetch_module(settings: Settings, grant: DownloadGrant, exchange: Exchange) -> bytes:
+def fetch_module(settings: Settings, module: LicensedModule, grant: DownloadGrant, exchange: Exchange) -> pathlib.Path:
     status, raw = exchange("GET", grant.url, None, grant.headers)
     if status != 200:
         raise CatalogError(f"file status {status}")
     if not raw:
         raise CatalogError("file was empty")
-    save_bytes(settings.download_dir, grant.filename, raw)
-    return raw
+    return save_cached(settings.download_dir, module, grant.filename, raw)
+
+
+def store_licensed(
+    settings: Settings,
+    module: LicensedModule,
+    exchange: Exchange,
+    bearer: str = "",
+    *,
+    refresh: bool = False,
+) -> tuple[pathlib.Path, bool]:
+    """Write one version under cache/{id}/{version}/. A file already there is left in place."""
+    if not refresh:
+        hit = cached_file(settings.download_dir, module)
+        if hit is not None:
+            return hit, True
+    grant = request_grant(settings, module, exchange, bearer)
+    return fetch_module(settings, module, grant, exchange), False
 
 
 def submit_code(

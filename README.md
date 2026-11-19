@@ -16,8 +16,14 @@ started yourself; set `TDS_CODE_VERIFIER` to that login's verifier.
 ```
 python -m spskit modules --id 25
 python -m spskit download --id 25
+python -m spskit downloads
+python -m spskit downloads --get
 python -m spskit sps --vin <VIN>
 ```
+
+`spskit downloads` lists every file version the signed-in license can see. `spskit downloads --get`
+stores each one under `SPS_DOWNLOAD_DIR/cache/{id}/{version}/` and skips a file that is already
+there. Add `--refresh` to fetch it again.
 
 `spskit sps --vin` writes that vehicle's module catalog to `spsinfo.sqlite` in the download directory.
 

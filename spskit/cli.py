@@ -26,13 +26,12 @@ from spskit.catalog import LicensedModule
 from spskit.client import (
     Exchange,
     exchange_authorization_code,
-    fetch_module,
     licensed_downloads,
     list_modules,
     open_backend_session,
     open_gateway_session,
-    request_grant,
     request_sps_form,
+    store_licensed,
     submit_code,
     submit_sporef_form,
     sync_sps_vin,
@@ -384,7 +383,11 @@ def run(
         "downloads",
         help="list licensed files, including the Techline Connect installer",
     )
-    downloads.add_argument("--get", action="store_true", dest="fetch", help="download each listed file")
+    downloads.add_argument("--get", action="store_true", dest="fetch", help="download each listed file into the cache")
+    downloads.add_argument(
+        "--refresh", action="store_true", help="fetch again even when the cache already has the file"
+    )
+    download.add_argument("--refresh", action="store_true", help="fetch again even when the cache already has the file")
     sub.add_parser("login", help="sign in with the password and ask the host to email a code")
     sub.add_parser("code", help="enter the emailed code for the saved challenge")
     sub.add_parser("verify", help="prompt for the emailed code, or read a challenge on stdin")
@@ -500,9 +503,8 @@ def run(
             found = licensed_downloads(settings, exchange, bearer)
             if args.fetch:
                 for module in found:
-                    grant = request_grant(settings, module, exchange, bearer)
-                    fetch_module(settings, grant, exchange)
-                    print(f"wrote {settings.download_dir / grant.filename}")
+                    path, cached = store_licensed(settings, module, exchange, bearer, refresh=args.refresh)
+                    print(f"{'cached' if cached else 'wrote'} {path}")
                 return 0
             for module in found:
                 print(format_module(module))
@@ -512,10 +514,10 @@ def run(
             for module in found:
                 print(format_module(module))
             return 0
+        refresh = args.refresh
         for module in found:
-            grant = request_grant(settings, module, exchange, bearer)
-            fetch_module(settings, grant, exchange)
-            print(f"wrote {settings.download_dir / grant.filename}")
+            path, cached = store_licensed(settings, module, exchange, bearer, refresh=refresh)
+            print(f"{'cached' if cached else 'wrote'} {path}")
         return 0
     except (ConfigError, SessionExpiredError, SpsInfoError, ValueError) as exc:
         print(str(exc), file=sys.stderr)

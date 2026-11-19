@@ -12,6 +12,8 @@ class CatalogError(ValueError):
 
 # The Techline Connect download button always asks for this CDL resource. The file is TLCSuite.
 INSTALLER_RESOURCE_ID = "25"
+# TUM's own CDL resource. The update manager asks for it with the rest of the licensed files.
+TUM_RESOURCE_ID = "1"
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,8 @@ def parse_permissions(payload: Mapping[str, object]) -> list[LicensedModule]:
     for item in versions:
         if not isinstance(item, Mapping):
             raise CatalogError("a resource version is not an object")
+        if item.get("disabled") is True:
+            continue
         modules.append(
             LicensedModule(
                 resource_id=_text(item, "cdlResourceId"),
@@ -80,12 +84,42 @@ def parse_resource_access(payload: Mapping[str, object]) -> list[ResourceAccess]
 def download_ids(access: list[ResourceAccess]) -> list[str]:
     """The installer, then any other decimal resource the account is allowed to run.
 
-    Launcher tabs are UUIDs. Those grant a page, not a file, so they are not downloaded.
+    Launcher tabs are UUIDs. Those grant a page, not a file, so they stay out of the download list.
     """
     chosen = [INSTALLER_RESOURCE_ID]
     for item in access:
         if item.runnable and item.resource_id.isdigit() and item.resource_id not in chosen:
             chosen.append(item.resource_id)
+    return chosen
+
+
+def parse_prelaunch(payload: Mapping[str, object]) -> list[str]:
+    """Decimal ids from GET /acl/cdl/resources/prelaunch. A disabled row is left out."""
+    items = payload.get("cdlResources")
+    if not isinstance(items, list):
+        raise CatalogError("cdlResources is missing")
+    found: list[str] = []
+    for item in items:
+        if not isinstance(item, Mapping):
+            raise CatalogError("a prelaunch resource is not an object")
+        if item.get("disabled") is True:
+            continue
+        identity = item.get("id")
+        if identity is None:
+            identity = item.get("cdlResourceId")
+        if isinstance(identity, str) and identity.isdigit() and identity not in found:
+            found.append(identity)
+    return found
+
+
+def catalog_ids(access: list[ResourceAccess], prelaunch: list[str]) -> list[str]:
+    """Every decimal file id the license surfaces, including the installer and TUM."""
+    chosen = download_ids(access)
+    for raw_id in prelaunch:
+        if raw_id not in chosen:
+            chosen.append(raw_id)
+    if TUM_RESOURCE_ID not in chosen:
+        chosen.append(TUM_RESOURCE_ID)
     return chosen
 
 

@@ -10,8 +10,10 @@ own ACDelco TDS subscription is licensed for.
 - Reads ACDelco / GM TDS settings from `.env`. `.env.example` ships with empty secrets. `.env` is gitignored.
 - Lists the versions of one resource the permissions call returns, and does not keep the account id.
 - Asks the gateway for a download grant and writes the file under `SPS_DOWNLOAD_DIR`, which must be an absolute path.
-- `spskit downloads` lists the Techline Connect installer and any other decimal resource the account can run.
-  `spskit downloads --get` writes those files in the same directory.
+- `spskit downloads` lists every licensed file version the gateway returns: the Techline Connect
+  installer, TUM, runnable decimal resources, prelaunch resources, and the update-manager search.
+  `spskit downloads --get` writes each version under `SPS_DOWNLOAD_DIR/cache/{id}/{version}/` and
+  leaves a file that is already there. `--refresh` fetches it again.
 - `spskit sps --vin` reads the SPS Info catalog for that one VIN and writes it to `SPS_DOWNLOAD_DIR/spsinfo.sqlite`.
   Running it again replaces that VIN. The file holds module names and part numbers.
 - `spskit login` posts the password and asks the host to email a code. It writes the challenge to the

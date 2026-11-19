@@ -43,15 +43,16 @@ so this package does not speak to a vehicle.
 | `sk.catalog.bearer` | `client.list_modules()` sends the SPOREF cookie bearer when supplied and does not send the saved access token | captured permissions request | `[ok]` | `tests/test_catalog.py::test_listing_does_not_send_the_saved_access_token` |
 | `sk.download.body` | `download.credentials_body()` asks for one module with empty token fields | captured downloadCredentials request | `[ok]` | `tests/test_download.py::test_the_request_starts_with_empty_token_fields` |
 | `sk.download.grant` | `download.parse_grant()` accepts one https URL and a single plain filename | captured downloadCredentials response | `[ok]` | `tests/test_download.py::test_a_grant_must_be_https_and_a_plain_filename` |
-| `sk.download.save` | `client.fetch_module()` writes the bytes under the download directory and nowhere else | captured file fetch | `[ok]` | `tests/test_download.py::test_download_writes_beside_the_given_directory` |
+| `sk.download.save` | `client.fetch_module()` writes the bytes under `cache/{id}/{version}/` in the download directory and nowhere else | captured file fetch | `[ok]` | `tests/test_download.py::test_download_writes_beside_the_given_directory` |
 
 ### Licensed files
 
 | Id | Obligation | Spec | Status | Evidence |
 |---|---|---|---|---|
 | `sk.downloads.access` | `catalog.parse_resource_access()` keeps the resource id and runnable flag and drops the account id | Techline Connect permissions search | `[ok]` | `tests/test_downloads.py::test_resource_access_drops_the_account_id` |
-| `sk.downloads.list` | `client.licensed_downloads()` asks for the Techline Connect installer and any other decimal resource the account can run | launcher resource 25 and permissions search | `[ok]` | `tests/test_downloads.py::test_the_installer_and_a_decimal_resource_are_listed` |
-| `sk.downloads.fetch` | `cli.run()` lists those files, and `--get` writes them under the download directory | same catalog | `[ok]` | `tests/test_downloads.py::test_downloads_lists_and_get_writes_the_file` |
+| `sk.downloads.list` | `client.licensed_downloads()` asks for the installer, TUM, every runnable decimal id, every prelaunch decimal id, and the update-manager version search | launcher search, `GET /acl/cdl/resources/prelaunch`, and `GET /acl/cdl/permissions/search` | `[ok]` | `tests/test_downloads.py::test_the_installer_and_a_decimal_resource_are_listed` |
+| `sk.downloads.fetch` | `cli.run()` lists those files, and `--get` writes each version under the cache and leaves a file that is already there | same catalog | `[ok]` | `tests/test_downloads.py::test_downloads_lists_and_get_writes_the_file` |
+| `sk.downloads.skip` | `catalog.parse_permissions()` omits a disabled version and `catalog.parse_prelaunch()` keeps decimal ids | TUM prelaunch and version records | `[ok]` | `tests/test_downloads.py::test_a_disabled_version_is_left_out` |
 | `sk.gateway.session` | `client.open_gateway_session()` posts the SPOREF handoff and `client.list_modules()` sends no Authorization | captured gateway calls | `[ok]` | `tests/test_downloads.py::test_the_handoff_leaves_the_eeid_token_off_the_gateway` |
 | `sk.gateway.cookies` | `cli.gateway_cookie_names()` lists the gateway cookie names and not their values | SPOREF handoff cookie jar | `[ok]` | `tests/test_cli.py::test_gateway_cookie_names_are_only_names` |
 
