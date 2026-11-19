@@ -6,8 +6,10 @@ An access token the person already holds can be saved here. A verification code 
 from __future__ import annotations
 
 import json
+import re
+import urllib.parse
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from spskit.config import ConfigError, Settings
@@ -101,6 +103,166 @@ def read_pending(path: Path) -> VerificationChallenge:
     if not isinstance(token, str) or not isinstance(href, str) or not isinstance(length, int):
         raise TokenError("there is no email challenge waiting")
     return VerificationChallenge(token, length, href)
+
+
+@dataclass(frozen=True, slots=True)
+class SavedSignIn:
+    """The email challenge after BeginAuth. The verification code is not here."""
+
+    code_length: int
+    flow_token: str
+    request_ctx: str
+    canary: str
+    hpg_request_id: str
+    username: str
+    code_verifier: str
+
+
+@dataclass(frozen=True, slots=True)
+class SavedStay:
+    """The stay-signed-in form, saved before it is posted. The verification code is not here."""
+
+    url: str
+    fields: tuple[tuple[str, str], ...]
+    code_verifier: str
+
+
+_VERIFIER = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
+_STAY_FIELDS = {"LoginOptions", "type", "ctx", "hpgrequestid", "flowToken", "canary", "i19"}
+
+
+def write_signin(
+    path: Path,
+    *,
+    code_length: int,
+    flow_token: str,
+    request_ctx: str,
+    canary: str,
+    hpg_request_id: str,
+    username: str,
+    code_verifier: str,
+) -> None:
+    """Remember the email challenge. A new challenge drops a half-finished stay-signed-in post."""
+    saved = SavedSignIn(
+        code_length,
+        _line(flow_token),
+        _line(request_ctx),
+        _line(canary),
+        _line(hpg_request_id),
+        _line(username),
+        _verifier(code_verifier),
+    )
+    if not 4 <= saved.code_length <= 12:
+        raise TokenError("the saved sign-in cannot be read")
+    payload = _read_object(path)
+    payload.pop("stay", None)
+    payload["signin"] = {
+        "code_length": saved.code_length,
+        "flow_token": saved.flow_token,
+        "request_ctx": saved.request_ctx,
+        "canary": saved.canary,
+        "hpg_request_id": saved.hpg_request_id,
+        "username": saved.username,
+        "code_verifier": saved.code_verifier,
+    }
+    _write_object(path, payload)
+
+
+def read_signin(path: Path) -> SavedSignIn:
+    raw = _read_object(path).get("signin")
+    if not isinstance(raw, dict):
+        raise TokenError("there is no email challenge waiting")
+    length = raw.get("code_length")
+    if not isinstance(length, int):
+        raise TokenError("there is no email challenge waiting")
+    return SavedSignIn(
+        length,
+        _line(raw.get("flow_token")),
+        _line(raw.get("request_ctx")),
+        _line(raw.get("canary")),
+        _line(raw.get("hpg_request_id")),
+        _line(raw.get("username")),
+        _verifier(raw.get("code_verifier")),
+    )
+
+
+def write_stay(path: Path, url: str, fields: list[tuple[str, str]], code_verifier: str) -> None:
+    """Remember the stay-signed-in form before posting it, so that post can be repeated."""
+    saved = SavedStay(url, tuple(fields), _verifier(code_verifier))
+    _stay_url(saved.url)
+    for name, value in saved.fields:
+        if name not in _STAY_FIELDS or any(char in value for char in "\r\n"):
+            raise TokenError("the saved sign-in cannot be read")
+    payload = _read_object(path)
+    payload["stay"] = {
+        "url": saved.url,
+        "fields": [[name, value] for name, value in saved.fields],
+        "code_verifier": saved.code_verifier,
+    }
+    _write_object(path, payload)
+
+
+def read_stay(path: Path) -> SavedStay | None:
+    raw = _read_object(path).get("stay")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise TokenError("the saved sign-in cannot be read")
+    pairs = raw.get("fields")
+    if not isinstance(pairs, list):
+        raise TokenError("the saved sign-in cannot be read")
+    fields: list[tuple[str, str]] = []
+    for pair in pairs:
+        if not isinstance(pair, list) or len(pair) != 2 or not isinstance(pair[0], str) or not isinstance(pair[1], str):
+            raise TokenError("the saved sign-in cannot be read")
+        if pair[0] not in _STAY_FIELDS:
+            raise TokenError("the saved sign-in cannot be read")
+        fields.append((pair[0], pair[1]))
+    return SavedStay(_stay_url(raw.get("url")), tuple(fields), _verifier(raw.get("code_verifier")))
+
+
+def write_cookies(path: Path, records: list[dict[str, object]]) -> None:
+    """Keep the sign-in cookies beside the challenge. They stay in this file, outside the repository."""
+    payload = _read_object(path)
+    payload["cookies"] = records
+    _write_object(path, payload)
+
+
+def read_cookies(path: Path) -> list[dict[str, object]]:
+    raw = _read_object(path).get("cookies")
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, dict)]
+
+
+def clear_sign_in(path: Path) -> None:
+    """Drop the challenge, the stay-signed-in form, and the sign-in cookies. The access token stays."""
+    payload = _read_object(path)
+    payload.pop("signin", None)
+    payload.pop("stay", None)
+    payload.pop("cookies", None)
+    _write_object(path, payload)
+
+
+def _line(value: object) -> str:
+    if not isinstance(value, str) or not value or any(char in value for char in "\r\n"):
+        raise TokenError("the saved sign-in cannot be read")
+    return value
+
+
+def _verifier(value: object) -> str:
+    if not isinstance(value, str) or _VERIFIER.fullmatch(value) is None:
+        raise TokenError("the saved sign-in cannot be read")
+    return value
+
+
+def _stay_url(value: object) -> str:
+    if not isinstance(value, str):
+        raise TokenError("the saved sign-in cannot be read")
+    parts = urllib.parse.urlsplit(value)
+    if parts.scheme != "https" or not parts.hostname or not parts.path.rstrip("/").endswith("/kmsi"):
+        raise TokenError("the saved sign-in cannot be read")
+    return value
 
 
 def read_session(path: Path) -> str:

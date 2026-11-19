@@ -290,8 +290,19 @@ def request_email_code(settings: Settings, exchange: Exchange) -> EmailRequest:
     return EmailRequest(_challenge(settings, signed_in, started), verifier)
 
 
-def submit_email_code(settings: Settings, requested: EmailRequest, code: str, exchange: Exchange) -> str:
-    """Post the typed code, accept the stay-signed-in page, and return the TDS redirect."""
+def submit_email_code(
+    settings: Settings,
+    requested: EmailRequest,
+    code: str,
+    exchange: Exchange,
+    *,
+    on_stay: Callable[[str, list[tuple[str, str]]], None] | None = None,
+) -> str:
+    """Post the typed code, accept the stay-signed-in page, and return the TDS redirect.
+
+    `on_stay` runs after the code is accepted and before the stay-signed-in form is posted,
+    so that post can be repeated without asking for another code.
+    """
     challenge = requested.challenge
     if len(code) != challenge.code_length or not code.isalnum():
         raise LoginError(f"the code must be {challenge.code_length} letters or digits")
@@ -331,13 +342,26 @@ def submit_email_code(settings: Settings, requested: EmailRequest, code: str, ex
     ]
     if not all(value for name, value in kmsi if name != "i19"):
         raise LoginError("the email code was not accepted")
-    status, raw = _form_call(
-        exchange,
-        _kmsi_url(settings, page),
-        kmsi,
-        settings.ciam + _PROCESS,
-        {"origin": settings.ciam},
-    )
+    url = _kmsi_url(settings, page)
+    if on_stay is not None:
+        on_stay(url, kmsi)
+    return post_stay_signed_in(settings, url, kmsi, exchange)
+
+
+def post_stay_signed_in(
+    settings: Settings,
+    url: str,
+    fields: list[tuple[str, str]],
+    exchange: Exchange,
+) -> str:
+    """Post the stay-signed-in form and return the TDS redirect."""
+    parts = urllib.parse.urlsplit(url)
+    host = urllib.parse.urlsplit(settings.ciam).hostname
+    if parts.scheme != "https" or parts.hostname != host or not parts.path.rstrip("/").endswith(_KMSI):
+        raise LoginError("the saved sign-in cannot be continued")
+    if any(name in {"otc", "passwd", "password"} for name, _value in fields):
+        raise LoginError("the saved sign-in cannot be continued")
+    status, raw = _form_call(exchange, url, fields, settings.ciam + _PROCESS, {"origin": settings.ciam})
     return _redirect_url(status, raw)
 
 

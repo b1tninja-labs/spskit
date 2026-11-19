@@ -254,6 +254,9 @@ def test_a_rejected_code_is_asked_again_without_a_new_email(tmp_path, capsys):
 
     assert run(["--env", str(env), "login"], exchange, reader) == 0
     assert begins == 1
+    assert posts == 0
+    assert run(["--env", str(env), "code"], exchange, reader) == 0
+    assert begins == 1
     assert posts == 2
     assert "That code was rejected." in capsys.readouterr().err
     saved = json.loads((tmp_path / "out" / "session.json").read_text(encoding="utf-8"))
@@ -390,6 +393,13 @@ def test_login_posts_the_password_then_waits_for_the_email_code(tmp_path, capsys
 
     code = run(["--env", str(env), "login"], exchange, reader)
     assert code == 0
+    assert "PROMPT" not in order
+    pending_text = (tmp_path / "out" / "session.json").read_text(encoding="utf-8")
+    assert "signin" in pending_text
+    assert "abcd1234" not in pending_text
+    assert "current-secret" not in pending_text
+    code = run(["--env", str(env), "code"], exchange, reader)
+    assert code == 0
     assert order.index("PROMPT") > next(i for i, url in enumerate(order) if url.endswith("/BeginAuth"))
     assert order.index("PROMPT") < next(i for i, url in enumerate(order) if str(url).endswith("/ProcessAuth"))
     captured = capsys.readouterr()
@@ -398,7 +408,86 @@ def test_login_posts_the_password_then_waits_for_the_email_code(tmp_path, capsys
     assert "current-secret" not in captured.out
     saved = json.loads((tmp_path / "out" / "session.json").read_text(encoding="utf-8"))
     assert saved["access_token"] == TOKEN
+    assert "signin" not in saved
+    assert "stay" not in saved
     assert "abcd1234" not in json.dumps(saved)
+
+
+def test_a_saved_stay_signed_in_finishes_without_a_new_email(tmp_path, capsys):
+    env = tmp_path / ".env"
+    env.write_text(
+        "\n".join(
+            [
+                "TDS_USERNAME=person@example.com",
+                "TDS_PASSWORD=current-secret",
+                "TDS_CIAM=https://ciam.example",
+                "TDS_BACKEND=https://backend.example",
+                "TDS_GATEWAY=https://gateway.example",
+                "SPS_DOWNLOAD_DIR=" + str(tmp_path / "out"),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    calls: list[str] = []
+    kmsi_posts = 0
+
+    def exchange(method, url, body, headers):
+        nonlocal kmsi_posts
+        calls.append(url)
+        if method == "GET":
+            return 200, PAGE.encode()
+        if url.endswith("/GetCredentialType"):
+            return 200, json.dumps({"IfExistsResult": 0, "FlowToken": "flow-2"}).encode()
+        if url.endswith("/login"):
+            return 200, MFA.encode()
+        if url.endswith("/BeginAuth"):
+            return 200, json.dumps(
+                {
+                    "Success": True,
+                    "ErrCode": 0,
+                    "ResultValue": "Success",
+                    "FlowToken": "flow-after-begin",
+                    "Ctx": "ctx-after-begin",
+                    "CorrelationId": "corr-begin",
+                }
+            ).encode()
+        if url.endswith("/ProcessAuth"):
+            assert parse_qs(body.decode())["otc"] == ["abcd1234"]
+            return 200, KMSI.encode()
+        if url.endswith("/kmsi"):
+            kmsi_posts += 1
+            if kmsi_posts == 1:
+                raise LoginError("the sign-in host closed the connection")
+            assert parse_qs(body.decode())["hpgrequestid"] == ["sess-kmsi"]
+            assert "otc" not in parse_qs(body.decode())
+            return 302, REDIRECT.encode()
+        if url.endswith("/token"):
+            assert b"abcd1234" not in body
+            return 200, json.dumps({"token_type": "Bearer", "access_token": TOKEN}).encode()
+        assert headers["X-EEID-Access-Token"] == TOKEN
+        return 200, b"{}"
+
+    prompts: list[str] = []
+
+    def reader(prompt: str) -> str:
+        prompts.append(prompt)
+        return "abcd1234"
+
+    assert run(["--env", str(env), "login"], exchange, reader) == 0
+    assert prompts == []
+    assert run(["--env", str(env), "code"], exchange, reader) == 2
+    saved = (tmp_path / "out" / "session.json").read_text(encoding="utf-8")
+    assert "abcd1234" not in saved
+    assert "/kmsi" in saved
+    assert run(["--env", str(env), "code"], exchange, reader) == 0
+    assert prompts == ["Enter the email code (8 characters): "]
+    assert kmsi_posts == 2
+    assert sum(1 for url in calls if url.endswith("/BeginAuth")) == 1
+    assert sum(1 for url in calls if url.endswith("/ProcessAuth")) == 1
+    assert "already accepted" in capsys.readouterr().err
+    finished = json.loads((tmp_path / "out" / "session.json").read_text(encoding="utf-8"))
+    assert finished["access_token"] == TOKEN
+    assert "stay" not in finished
 
 
 def test_a_short_code_is_refused_before_it_is_sent(tmp_path):

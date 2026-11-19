@@ -20,9 +20,10 @@ Use the pinned toolchain in `projecthub/src/projecthub/shells/requirements-dev.t
 1. **The matrix and the code agree.** A row is `[ok]` only when it names a callable and a test that exists.
    `tests/test_roadmap_rows.py` checks it.
 2. **Secrets stay out of the tree.** `.env` is gitignored. `.env.example` has empty username, password and token.
-   A verification code is read from the prompt and is not written to disk. `spskit login` sends that code
-   once. `spskit session` writes an access token the person already holds only to the session file outside
-   the repository.
+   A verification code is read from the prompt and is not written to disk. `spskit login` asks the host
+   to email a code and saves that challenge. `spskit code` sends the typed code. Repeating `spskit code`
+   continues the same challenge. `spskit session` writes an access token the person already holds only to
+   the session file outside the repository.
 3. **The sign-in password is the login form's `passwd` field.** That value is `TDS_NEW_PASSWORD` when it
    is set, and `TDS_PASSWORD` otherwise. The email code goes on `ProcessAuth` as `otc` and nowhere else.
    The reset PUT, when that separate captured path runs, posts `newPassword` and nothing else. The token

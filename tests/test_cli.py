@@ -4,8 +4,12 @@ import json
 import pathlib
 import subprocess
 import sys
+import urllib.error
 
-from spskit.cli import run
+import pytest
+
+from spskit.cli import run, urllib_exchange
+from spskit.login_start import LoginError
 from spskit.verify import parse_challenge
 
 VERIFIER = "b" * 43
@@ -141,3 +145,48 @@ def test_python_m_spskit_reaches_the_cli():
     )
     assert completed.returncode == 0
     assert "session" in completed.stdout
+    assert "code" in completed.stdout
+
+
+def test_a_closed_connection_is_retried(monkeypatch):
+    calls = 0
+
+    class Response:
+        status = 200
+
+        def read(self) -> bytes:
+            return b"ok"
+
+        def __enter__(self) -> Response:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    def open_request(_request: object, timeout: int = 60) -> Response:
+        nonlocal calls
+        del timeout
+        calls += 1
+        if calls < 3:
+            raise urllib.error.URLError(ConnectionResetError(10054, "reset"))
+        return Response()
+
+    monkeypatch.setattr("spskit.cli._OPENER.open", open_request)
+    delays: list[float] = []
+    status, body = urllib_exchange("GET", "https://ciam.example/login", None, {}, sleeper=delays.append)
+    assert status == 200
+    assert body == b"ok"
+    assert delays == [1.0, 2.0]
+    assert calls == 3
+
+
+def test_a_closed_connection_stops_after_the_backoff(monkeypatch):
+    def open_request(_request: object, timeout: int = 60) -> object:
+        del timeout
+        raise urllib.error.URLError(ConnectionResetError(10054, "reset"))
+
+    monkeypatch.setattr("spskit.cli._OPENER.open", open_request)
+    delays: list[float] = []
+    with pytest.raises(LoginError, match="closed the connection"):
+        urllib_exchange("GET", "https://ciam.example/login", None, {}, sleeper=delays.append)
+    assert delays == [1.0, 2.0, 4.0]

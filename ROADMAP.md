@@ -30,7 +30,9 @@ so this package does not speak to a vehicle.
 | `sk.verify.submit` | `client.submit_code()` posts the code once and does not store it on settings | captured verify request | `[ok]` | `tests/test_verify.py::test_the_code_is_posted_once_and_not_kept_on_settings` |
 | `sk.cli.verify` | `cli.run()` prompts and reports continue | captured verify response | `[ok]` | `tests/test_cli.py::test_verify_prompts_and_reports_continue` |
 | `sk.cli.expired` | `cli.run()` reports an expired session and does not invent a code to send | gateway 401 | `[ok]` | `tests/test_cli.py::test_an_expired_session_is_reported_without_prompting` |
-| `sk.login.email` | `login_start.request_email_code()` posts the password and BeginAuth, then `cli.run()` waits for the email code | captured sign-in | `[ok]` | `tests/test_login_start.py::test_login_posts_the_password_then_waits_for_the_email_code` |
+| `sk.login.email` | `login_start.request_email_code()` posts the password and BeginAuth, then `cli.run()` saves the challenge and `spskit code` waits for the email code | captured sign-in | `[ok]` | `tests/test_login_start.py::test_login_posts_the_password_then_waits_for_the_email_code` |
+| `sk.login.resume` | `cli.run()` finishes a saved stay-signed-in post and does not call BeginAuth | captured sign-in | `[ok]` | `tests/test_login_start.py::test_a_saved_stay_signed_in_finishes_without_a_new_email` |
+| `sk.login.retry` | `cli.urllib_exchange()` retries a connection the host closed | local transport | `[ok]` | `tests/test_cli.py::test_a_closed_connection_is_retried` |
 
 ### Licensed modules
 

@@ -53,9 +53,13 @@ The browser lands on `https://www.acdelcotds.com/#code=...`. The token call is
 `POST https://backend.acdelcotds.com/api/v1/login?zoneId=America/Los_Angeles` sends that token in
 `X-EEID-Access-Token` and an empty body. The profile in the response is discarded.
 
-`spskit login` keeps the access token from that exchange in the session file. `spskit session` can
-also store an access token the person already holds. The eight-character email code is a different
-prompt and is not written to that file.
+`spskit login` stops after BeginAuth and writes the challenge, the code verifier, and the sign-in
+cookies to the session file. `spskit code` reads that file and posts the typed code. Once the code is
+accepted, the stay-signed-in form is written before it is posted. A closed connection is retried with
+a pause of one, then two, then four seconds. `spskit code` can be run again on the saved challenge.
+The access token from the exchange is what the file keeps afterwards. `spskit session` can also store
+an access token the person already holds. The eight-character email code is a different prompt and is
+not written to that file.
 
 ## Gateway
 

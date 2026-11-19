@@ -10,9 +10,10 @@ own ACDelco TDS subscription is licensed for.
 - Reads ACDelco / GM TDS settings from `.env`. `.env.example` ships with empty secrets. `.env` is gitignored.
 - Lists the versions of one resource the permissions call returns, and does not keep the account id.
 - Asks the gateway for a download grant and writes the file under `SPS_DOWNLOAD_DIR`, which must be an absolute path.
-- `spskit login` posts the password, asks the host to email a code, waits for that code, and does not
-  write the code into `.env` or onto the settings object. The access token from the redirect is written
-  to the session file.
+- `spskit login` posts the password and asks the host to email a code. It writes the challenge to the
+  session file and does not write the code. `spskit code` reads that challenge, waits for the code, and
+  writes the access token from the redirect. A dropped connection retries, and `spskit code` can be
+  repeated without another email.
 - `spskit session` prompts for an access token the person already holds and writes it to
   `SPS_DOWNLOAD_DIR/session.json`, or to `TDS_TOKEN_FILE` when that absolute path is set. Later commands
   load it when `TDS_ACCESS_TOKEN` is empty.
@@ -37,6 +38,7 @@ From this directory:
     python -m spskit modules --id 25
     python -m spskit download --id 25
     python -m spskit login
+    python -m spskit code
     python -m spskit session
     python -m spskit verify < challenge.json
     python -m spskit token --redirect "https://www.acdelcotds.com/#code=..."
