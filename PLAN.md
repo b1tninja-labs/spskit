@@ -12,6 +12,8 @@ own ACDelco TDS subscription is licensed for.
 - Asks the gateway for a download grant and writes the file under `SPS_DOWNLOAD_DIR`, which must be an absolute path.
 - When the sign-in host returns a verification challenge, prompts for the code, posts it to the path the host named,
   and does not write the code into `.env` or onto the settings object.
+- `spskit session` prompts for the access token from the email and writes it to `SPS_DOWNLOAD_DIR/session.json`,
+  or to `TDS_TOKEN_FILE` when that absolute path is set. Later commands load it when `TDS_ACCESS_TOKEN` is empty.
 - A gateway 401 is reported as an expired session. The command does not invent a code to send.
 
 ## 2. What it does not do
@@ -32,6 +34,7 @@ From this directory:
     copy .env.example .env
     python -m spskit modules --id 25
     python -m spskit download --id 25
+    python -m spskit session
     python -m spskit verify < challenge.json
     python -m spskit token --redirect "https://www.acdelcotds.com/#code=..."
 

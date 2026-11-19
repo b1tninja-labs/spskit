@@ -28,6 +28,9 @@ The browser lands on `https://www.acdelcotds.com/#code=...`. The token call is
 `POST https://backend.acdelcotds.com/api/v1/login?zoneId=America/Los_Angeles` sends that token in
 `X-EEID-Access-Token` and an empty body. The profile in the response is discarded.
 
+The access token that arrives by email is pasted at `spskit session` and kept in the session file.
+The eight-character verification code is a different prompt and is not written to that file.
+
 ## Gateway
 
 `GET /acl/cdl/resources/{id}/permissions` returns `resourceVersions` with `cdlResourceId`,

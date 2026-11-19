@@ -20,7 +20,8 @@ Use the pinned toolchain in `projecthub/src/projecthub/shells/requirements-dev.t
 1. **The matrix and the code agree.** A row is `[ok]` only when it names a callable and a test that exists.
    `tests/test_roadmap_rows.py` checks it.
 2. **Secrets stay out of the tree.** `.env` is gitignored. `.env.example` has empty username, password and token.
-   A verification code is read from the prompt and is not written to disk.
+   A verification code is read from the prompt and is not written to disk. The access token from the
+   email is prompted by `spskit session` and written only to the session file outside the repository.
 3. **The password leaves the machine only on the reset PUT.** That captured step posts `newPassword`
    from `TDS_NEW_PASSWORD`, or from `TDS_PASSWORD` when the new one is empty. Recover and poll post the
    continuation only. The token request has no password field. Do not copy a password into the tree.

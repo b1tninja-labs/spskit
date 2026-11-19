@@ -22,6 +22,7 @@ from spskit.client import (
     submit_code,
 )
 from spskit.config import ConfigError, load_settings
+from spskit.session import apply_saved_session, prompt_emailed_token, session_path, write_session
 from spskit.verify import SessionExpiredError, parse_challenge
 
 
@@ -55,19 +56,25 @@ def run(
     download = sub.add_parser("download", help="download every version of one licensed resource")
     download.add_argument("--id", required=True, help="decimal resource id")
     sub.add_parser("verify", help="read a verification challenge on stdin and prompt for the code")
+    sub.add_parser("session", help="prompt for the access token from the email and save it")
     token = sub.add_parser("token", help="exchange the TDS redirect for an access token")
     token.add_argument("--redirect", required=True, help="the https://www.acdelcotds.com/#code=... URL")
     args = parser.parse_args(list(argv))
     try:
         settings = load_settings(pathlib.Path(args.env))
+        if args.command == "session":
+            emailed = prompt_emailed_token(reader)
+            path = session_path(settings)
+            write_session(path, emailed)
+            print(f"wrote the session to {path}")
+            return 0
+        settings = apply_saved_session(settings)
         if args.command == "token":
             access = exchange_authorization_code(settings, args.redirect, exchange)
             open_backend_session(settings, access, exchange)
-            if settings.token_file is not None:
-                settings.token_file.write_text(access, encoding="utf-8")
-                print(f"wrote the access token to {settings.token_file}")
-            else:
-                print("TDS session accepted. Set TDS_TOKEN_FILE to keep the access token.")
+            path = session_path(settings)
+            write_session(path, access)
+            print(f"wrote the session to {path}")
             return 0
         if args.command == "verify":
             raw = sys.stdin.read() if stdin_text is None else stdin_text

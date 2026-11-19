@@ -85,4 +85,44 @@ def test_token_command_writes_the_token_and_does_not_print_it(tmp_path, capsys):
     code = run(["--env", str(env), "token", "--redirect", REDIRECT], exchange)
     assert code == 0
     assert "access-token-value-0001" not in capsys.readouterr().out
-    assert token_file.read_text(encoding="utf-8") == "access-token-value-0001"
+    assert json.loads(token_file.read_text(encoding="utf-8"))["access_token"] == "access-token-value-0001"
+
+
+def test_session_prompts_for_the_emailed_token_and_later_commands_send_it(tmp_path, capsys):
+    env = tmp_path / ".env"
+    download = tmp_path / "out"
+    env.write_text("SPS_DOWNLOAD_DIR=" + str(download) + "\n", encoding="utf-8")
+    emailed = "access-token-from-email"
+
+    def reader(prompt: str) -> str:
+        assert "email" in prompt
+        return emailed
+
+    code = run(["--env", str(env), "session"], lambda *_args: (0, b""), reader)
+    assert code == 0
+    assert emailed not in capsys.readouterr().out
+    saved = json.loads((download / "session.json").read_text(encoding="utf-8"))
+    assert saved == {"access_token": emailed}
+
+    def exchange(method, url, body, headers):
+        assert method == "GET"
+        assert url.endswith("/permissions")
+        assert body is None
+        assert headers["authorization"] == "Bearer " + emailed
+        return 200, json.dumps(
+            {
+                "resourceVersions": [
+                    {
+                        "cdlResourceId": "25",
+                        "cdlResourceName": "Example",
+                        "cdlResourceDescription": "A module",
+                        "cdlResourceTypeCode": "SOFTWARE",
+                        "versionNumber": "1",
+                    }
+                ]
+            }
+        ).encode()
+
+    code = run(["--env", str(env), "modules", "--id", "25"], exchange, lambda _prompt: "not-asked")
+    assert code == 0
+    assert emailed not in capsys.readouterr().out
