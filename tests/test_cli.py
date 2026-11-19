@@ -6,11 +6,12 @@ import pathlib
 import subprocess
 import sys
 import urllib.error
+import urllib.request
 
 import pytest
 
 from spskit.cli import _TryingHTTPSConnection, run, urllib_exchange
-from spskit.login_start import LoginError
+from spskit.login_start import BROWSER_USER_AGENT, LoginError
 from spskit.verify import parse_challenge
 
 VERIFIER = "b" * 43
@@ -207,6 +208,50 @@ def test_the_access_token_header_keeps_its_spelling(monkeypatch):
     monkeypatch.setattr(http.client.HTTPSConnection, "putheader", capture)
     _TryingHTTPSConnection("backend.example").putheader("X-Eeid-Access-Token", "value")
     assert seen == ["X-EEID-Access-Token"]
+
+
+def test_the_exchange_sends_a_browser_user_agent(monkeypatch):
+    captured: list[object] = []
+
+    class Response:
+        status = 200
+
+        def read(self) -> bytes:
+            return b""
+
+        def __enter__(self) -> Response:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    def open_request(request: urllib.request.Request, timeout: int = 60) -> Response:
+        del timeout
+        captured.append(request)
+        return Response()
+
+    monkeypatch.setattr("spskit.cli._OPENER.open", open_request)
+    status, body = urllib_exchange("GET", "https://gateway.example/acl", None, {"accept": "application/json"})
+    assert status == 200
+    assert body == b""
+    request = captured[0]
+    assert isinstance(request, urllib.request.Request)
+    agent = request.get_header("User-agent")
+    assert agent == BROWSER_USER_AGENT
+    assert "Chrome/157" in agent
+    assert "Python-urllib" not in agent
+    urllib_exchange("GET", "https://gateway.example/acl", None, {"user-agent": "Custom/1"})
+    custom = captured[1]
+    assert isinstance(custom, urllib.request.Request)
+    assert custom.get_header("User-agent") == "Custom/1"
+    seen: list[object] = []
+
+    def capture(_self: object, header: object, *_values: object) -> None:
+        seen.append(header)
+
+    monkeypatch.setattr(http.client.HTTPSConnection, "putheader", capture)
+    _TryingHTTPSConnection("gateway.example").putheader("User-agent", agent)
+    assert seen == ["User-Agent"]
 
 
 def test_a_saved_token_retries_the_backend_without_a_new_code(tmp_path, capsys):

@@ -33,7 +33,10 @@ _APP_VERIFY = "/appverify"
 _COOKIE_NAME = re.compile(r"^[A-Za-z0-9_]{1,40}$")
 _LABEL = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 _PATH = re.compile(r"/[A-Za-z0-9_./-]{0,120}")
-_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+# The Chrome agent from the captured browser on Windows. Python-urllib is not sent.
+BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36"
+)
 
 
 class LoginError(VerificationError):
@@ -204,7 +207,7 @@ def page_headers(config: Mapping[str, object], referer: str) -> dict[str, str]:
         "accept": "application/json",
         "content-type": "application/json",
         "referer": referer,
-        "user-agent": _UA,
+        "user-agent": BROWSER_USER_AGENT,
     }
     pairs = (
         ("canary", "apiCanary"),
@@ -420,7 +423,7 @@ def _load_config(settings: Settings, exchange: Exchange, page_url: str) -> tuple
     The first authorize response is a Redirecting page with no `sFT`. The browser then
     requests the same URL with `sso_reload=true`, and that response is the sign-in form.
     """
-    html_headers = {"accept": "text/html", "user-agent": _UA}
+    html_headers = {"accept": "text/html", "user-agent": BROWSER_USER_AGENT}
     status, raw = exchange("GET", page_url, None, html_headers)
     if status != 200:
         raise LoginError(f"the sign-in page was refused ({status})")
@@ -711,7 +714,7 @@ def _form_call(
         "accept": "text/html",
         "content-type": "application/x-www-form-urlencoded",
         "referer": referer,
-        "user-agent": _UA,
+        "user-agent": BROWSER_USER_AGENT,
     }
     if extra:
         headers.update(extra)

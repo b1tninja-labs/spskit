@@ -84,7 +84,8 @@ when the file needs one). The file is fetched from that https URL.
 
 The captured calls did not send an `Authorization` header. `TDS_ACCESS_TOKEN`, when set, is sent as
 a bearer because a later licensed call may require the session the child-token call returns. An empty
-token sends no authorization header.
+token sends no authorization header. The captured browser sent `User-Agent` for Chrome 157 on Windows.
+This client sends that same agent. It does not send `Python-urllib`.
 
 ## Licensed files
 

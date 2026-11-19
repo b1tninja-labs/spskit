@@ -35,6 +35,7 @@ from spskit.client import (
 )
 from spskit.config import ConfigError, load_settings
 from spskit.login_start import (
+    BROWSER_USER_AGENT,
     CodeRejectedError,
     EmailRequest,
     LoginError,
@@ -142,7 +143,10 @@ _OPENER = urllib.request.build_opener(
 )
 _RETRY_DELAYS = (1.0, 2.0, 4.0)
 _COOKIE_NAME = re.compile(r"^[A-Za-z0-9_]{1,40}$")
-_EXACT_HEADERS = {"x-eeid-access-token": "X-EEID-Access-Token"}
+_EXACT_HEADERS = {
+    "user-agent": "User-Agent",
+    "x-eeid-access-token": "X-EEID-Access-Token",
+}
 
 
 def _store_cookie(url: str, header: str) -> None:
@@ -187,6 +191,8 @@ def urllib_exchange(
     if parts.scheme != "https":
         raise SessionExpiredError("refusing a URL that is not https")
     outgoing = dict(headers)
+    if not any(name.lower() == "user-agent" for name in outgoing):
+        outgoing["User-Agent"] = BROWSER_USER_AGENT
     extra_cookie = outgoing.pop("cookie", None)
     if extra_cookie:
         _store_cookie(url, extra_cookie)
