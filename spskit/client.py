@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.parse
 from collections.abc import Callable, Mapping
 from typing import Protocol
@@ -204,18 +205,48 @@ def exchange_authorization_code(settings: Settings, redirect_url: str, exchange:
     if any(secret and secret in posted for secret in (settings.password, settings.new_password)):
         raise SessionExpiredError("refusing to send the stored password to the token endpoint")
     url = f"{settings.ciam}/{settings.tenant}/oauth2/v2.0/token"
+    origin = urllib.parse.urlsplit(settings.redirect_uri)
     status, raw = exchange(
         "POST",
         url,
         urllib.parse.urlencode(form).encode("utf-8"),
-        {"content-type": "application/x-www-form-urlencoded", "accept": "application/json"},
+        {
+            "content-type": "application/x-www-form-urlencoded",
+            "accept": "application/json",
+            "origin": f"{origin.scheme}://{origin.netloc}",
+        },
     )
     if status != 200:
-        raise SessionExpiredError(f"the token endpoint refused the code ({status})")
+        raise SessionExpiredError(f"the token endpoint refused the code ({status}; {_token_error(raw)})")
     payload = json.loads(raw.decode("utf-8"))
     if not isinstance(payload, dict):
         raise SessionExpiredError("token response is not an object")
     return parse_access_token(payload)
+
+
+def _token_error(raw: bytes) -> str:
+    """The OAuth error name and numeric codes. The description can echo the authorization code."""
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError:
+        return "not json"
+    if not isinstance(payload, dict):
+        return "not an object"
+    parts: list[str] = []
+    error = payload.get("error")
+    if isinstance(error, str) and re.fullmatch(r"[a-z_]{1,40}", error):
+        parts.append(error)
+    codes = payload.get("error_codes")
+    if isinstance(codes, list):
+        numbers = [str(code) for code in codes if isinstance(code, int)]
+        if numbers:
+            parts.append(",".join(numbers[:4]))
+    description = payload.get("error_description")
+    if isinstance(description, str):
+        named = re.search(r"AADSTS\d{4,8}", description)
+        if named is not None and named.group(0) not in parts:
+            parts.append(named.group(0))
+    return " ".join(parts) or "no error code"
 
 
 def open_backend_session(settings: Settings, access_token: str, exchange: Exchange) -> None:

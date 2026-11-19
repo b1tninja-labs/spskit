@@ -15,7 +15,7 @@ from spskit.signin import (
     password_update_body,
     token_form,
 )
-from spskit.verify import parse_challenge
+from spskit.verify import SessionExpiredError, parse_challenge
 
 VERIFIER = "a" * 43
 REDIRECT = "https://www.acdelcotds.com/#code=example-authorization-code&client_info=1"
@@ -138,6 +138,7 @@ def test_the_code_is_exchanged_and_the_profile_is_discarded(tmp_path):
         if url.endswith("/token"):
             posted = urllib.parse.parse_qs(body.decode())
             assert posted["grant_type"] == ["authorization_code"]
+            assert headers["origin"] == "https://www.acdelcotds.com"
             assert "stored-password" not in body.decode()
             return 200, json.dumps(
                 {"token_type": "Bearer", "access_token": "access-token-value-0001", "refresh_token": "refresh-secret"}
@@ -151,3 +152,32 @@ def test_the_code_is_exchanged_and_the_profile_is_discarded(tmp_path):
     open_backend_session(settings, access, exchange)
     assert access == "access-token-value-0001"
     assert seen[1][1] is None
+
+
+def test_a_refused_token_names_the_error_and_hides_the_description(tmp_path):
+    settings = Settings(
+        username="person",
+        password="stored-password",
+        gateway="https://gateway.example",
+        ciam="https://ciam.example",
+        access_token="",
+        download_dir=tmp_path,
+        code_verifier=VERIFIER,
+    )
+
+    def exchange(_method, url, _body, _headers):
+        assert url.endswith("/token")
+        return 400, json.dumps(
+            {
+                "error": "invalid_grant",
+                "error_codes": [50148],
+                "error_description": "AADSTS50148: secret-authorization-code",
+            }
+        ).encode()
+
+    with pytest.raises(SessionExpiredError, match="invalid_grant") as caught:
+        exchange_authorization_code(settings, REDIRECT, exchange)
+    message = str(caught.value)
+    assert "50148" in message
+    assert "AADSTS50148" in message
+    assert "secret-authorization-code" not in message

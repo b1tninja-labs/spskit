@@ -52,7 +52,8 @@ call posts `continuationToken` and `otp`. When that path continues into a reset,
 
 The browser lands on `https://www.acdelcotds.com/#code=...`. The token call is
 `POST /{tenant}/oauth2/v2.0/token` with form fields `client_id`, `redirect_uri`, `scope`, `code`,
-`code_verifier`, `grant_type=authorization_code` and `client_info=1`. The response has `token_type`,
+`code_verifier`, `grant_type=authorization_code` and `client_info=1`. The request sends `Origin`
+for the redirect site, because this public client only redeems a code on a cross-origin call. The response has `token_type`,
 `access_token` and `refresh_token`. Only the access token is kept.
 
 `POST https://backend.acdelcotds.com/api/v1/login?zoneId=America/Los_Angeles` sends that token in
