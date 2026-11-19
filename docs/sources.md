@@ -36,6 +36,8 @@ sends `ContinueAuth=true`, `ctx`, `hpgrequestid` from `sessionId`, `flowToken`, 
 `InvalidOneTimePasscode` keeps the same email and returns a new flow token; the command asks again
 and does not call `BeginAuth` a second time.
 `POST /kmsi` sends `LoginOptions=1`, `type=28`, `ctx`, `hpgrequestid` from the page `sessionId`, `flowToken`, `canary` and `i19`.
+That response can be the 302, or the Redirecting page (`stsErrorCode` `50168`) whose `oPostParams` are the same form.
+Posting that form back to `urlPost` with `sso_reload=true` returns the 302.
 The response is a 302 whose `Location` is `https://www.acdelcotds.com/#code=...`.
 
 A separate captured path, not used by `spskit login`, is password recovery. That JSON challenge has

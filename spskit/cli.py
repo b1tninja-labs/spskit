@@ -420,6 +420,7 @@ def run(
         if args.command == "code" and first_line not in {
             "there is no email challenge waiting",
             "the sign-in challenge expired",
+            "the sign-in session expired",
         }:
             print("The challenge is still saved. Run python -m spskit code again.", file=sys.stderr)
         elif args.command == "login" and str(exc) == "the sign-in host closed the connection":

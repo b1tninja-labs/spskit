@@ -388,7 +388,7 @@ def post_stay_signed_in(
     if any(name in {"otc", "passwd", "password"} for name, _value in fields):
         raise LoginError("the saved sign-in cannot be continued")
     status, raw = _form_call(exchange, url, fields, settings.ciam + _PROCESS, {"origin": settings.ciam})
-    return _redirect_url(status, raw)
+    return _finish_redirect(settings, exchange, status, raw, url)
 
 
 def _next_challenge(challenge: MfaChallenge, page: Mapping[str, object]) -> MfaChallenge:
@@ -558,8 +558,11 @@ def _raise_if_expired(html_text: str, status: int) -> None:
     if not isinstance(obj, dict):
         return
     code = obj.get("stsErrorCode")
+    detail = describe_sign_in_page(html_text, status)
+    if code in {165000, "165000"}:
+        raise LoginError(f"the sign-in session expired\n{detail}")
     if obj.get("pgid") == "ConvergedError" or code in {50089, "50089"}:
-        raise LoginError(f"the sign-in challenge expired\n{describe_sign_in_page(html_text, status)}")
+        raise LoginError(f"the sign-in challenge expired\n{detail}")
 
 
 def _code_form(page: Mapping[str, object]) -> bool:
@@ -611,10 +614,27 @@ def _kmsi_url(settings: Settings, config: Mapping[str, object]) -> str:
 
 def _redirect_url(status: int, raw: bytes) -> str:
     if status not in (301, 302, 303, 307, 308):
-        raise LoginError("the sign-in host did not return the TDS redirect")
+        raise LoginError(
+            f"the sign-in host did not return the TDS redirect\n{describe_sign_in_page(raw.decode('utf-8', errors='replace'), status)}"
+        )
     location = raw.decode("utf-8", errors="replace").strip()
     authorization_code(location)
     return location
+
+
+def _finish_redirect(settings: Settings, exchange: Exchange, status: int, raw: bytes, referer: str) -> str:
+    """The stay-signed-in response is a 302, or the same Redirecting page the earlier steps post back."""
+    if status in (301, 302, 303, 307, 308):
+        return _redirect_url(status, raw)
+    text = raw.decode("utf-8", errors="replace")
+    obj = _page_object(text)
+    if isinstance(obj, dict) and isinstance(obj.get("oPostParams"), dict) and parse_page_config(text) is None:
+        status, raw = _post_redirect(settings, exchange, text, referer)
+        if status in (301, 302, 303, 307, 308):
+            return _redirect_url(status, raw)
+        text = raw.decode("utf-8", errors="replace")
+    _raise_if_expired(text, status)
+    raise LoginError(f"the sign-in host did not return the TDS redirect\n{describe_sign_in_page(text, status)}")
 
 
 def _page_object(html_text: str) -> dict[str, object] | None:
@@ -637,6 +657,19 @@ def _page_object(html_text: str) -> dict[str, object] | None:
         start = brace + 1
 
 
+def _redirect_target(settings: Settings, posted: str) -> str:
+    """The redirect page's post URL, including its query, plus `sso_reload=true`."""
+    parts = urllib.parse.urlsplit(posted)
+    if posted.startswith("/") and "://" not in posted and "\\" not in posted and ".." not in posted:
+        target = settings.ciam + posted
+    else:
+        bare = urllib.parse.urlsplit(_ciam_url(settings, posted))
+        target = urllib.parse.urlunsplit((bare.scheme, bare.netloc, bare.path, parts.query, ""))
+    if "sso_reload=" not in urllib.parse.urlsplit(target).query:
+        target += "&sso_reload=true" if urllib.parse.urlsplit(target).query else "?sso_reload=true"
+    return target
+
+
 def _post_redirect(settings: Settings, exchange: Exchange, html_text: str, referer: str) -> tuple[int, bytes]:
     """Post the redirect page's own form back, with `sso_reload=true`.
 
@@ -648,9 +681,7 @@ def _post_redirect(settings: Settings, exchange: Exchange, html_text: str, refer
     posted = _text(obj, "urlPost") if isinstance(obj, dict) else ""
     if not isinstance(obj, dict) or not isinstance(params, dict) or not posted:
         raise LoginError(f"the sign-in page did not include a flow token\n{describe_sign_in_page(html_text, 200)}")
-    target = _ciam_url(settings, posted)
-    if "sso_reload=" not in target:
-        target += "&sso_reload=true" if urllib.parse.urlsplit(target).query else "?sso_reload=true"
+    target = _redirect_target(settings, posted)
     fields: list[tuple[str, str]] = []
     for key, value in params.items():
         if isinstance(key, str) and isinstance(value, str):
