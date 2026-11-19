@@ -309,29 +309,17 @@ def submit_email_code(
     challenge = requested.challenge
     if len(code) != challenge.code_length or not code.isalnum():
         raise LoginError(f"the code must be {challenge.code_length} letters or digits")
-    fields = [
-        ("otc", code),
-        ("canary", challenge.canary),
-        ("flowToken", challenge.flow_token),
-        ("request", challenge.request_ctx),
-        ("login", challenge.username),
-        ("hpgrequestid", challenge.hpg_request_id),
-        ("mfaAuthMethod", "Email"),
-    ]
-    status, raw = _form_call(exchange, f"{settings.ciam}{_PROCESS}", fields, settings.ciam + _PROCESS)
-    del code
-    del fields
-    if status != 200:
-        raise LoginError(f"the email code was refused ({status})")
-    text = raw.decode("utf-8", errors="replace")
-    page = parse_page_config(text)
-    if page is None:
-        status, raw = _post_redirect(settings, exchange, text, settings.ciam + _PROCESS)
-        if status != 200:
-            raise LoginError(f"the email code was refused ({status})\n{describe_sign_in_page(text, status)}")
-        text = raw.decode("utf-8", errors="replace")
-        page = parse_page_config(text)
-    detail = describe_sign_in_page(text, status)
+    try:
+        status, text, page = _exchange_code(settings, challenge, code, exchange)
+        detail = describe_sign_in_page(text, status)
+        if page is not None and _error_code(page) == "InvalidOneTimePasscode":
+            raise CodeRejectedError(_next_challenge(challenge, page))
+        if page is not None and _code_form(page):
+            challenge = _next_challenge(challenge, page)
+            status, text, page = _exchange_code(settings, challenge, code, exchange)
+            detail = describe_sign_in_page(text, status)
+    finally:
+        del code
     if page is None:
         raise LoginError(f"the sign-in host rejected that code\n{detail}")
     if _error_code(page) == "InvalidOneTimePasscode":
@@ -502,6 +490,9 @@ def describe_sign_in_page(html_text: str, status: int) -> str:
         name for name in ("sFT", "sCtx", "sessionId", "correlationId", "canary", "apiCanary") if _text(page, name)
     ]
     bits.append("fields " + (",".join(present) if present else "none"))
+    names = [key for key in page if isinstance(key, str) and _LABEL.fullmatch(key)]
+    if names:
+        bits.append("keys " + ",".join(names[:12]))
     return "; ".join(bits)
 
 
@@ -529,6 +520,56 @@ def _post_path(url: str) -> str:
     if _PATH.fullmatch(path) is None or ".." in path:
         return ""
     return path
+
+
+def _exchange_code(
+    settings: Settings,
+    challenge: MfaChallenge,
+    code: str,
+    exchange: Exchange,
+) -> tuple[int, str, dict[str, object] | None]:
+    """Post the code and follow the redirect page. The returned text is the page that was judged."""
+    fields = [
+        ("otc", code),
+        ("canary", challenge.canary),
+        ("flowToken", challenge.flow_token),
+        ("request", challenge.request_ctx),
+        ("login", challenge.username),
+        ("hpgrequestid", challenge.hpg_request_id),
+        ("mfaAuthMethod", "Email"),
+    ]
+    status, raw = _form_call(exchange, f"{settings.ciam}{_PROCESS}", fields, settings.ciam + _PROCESS)
+    if status != 200:
+        raise LoginError(f"the email code was refused ({status})")
+    text = raw.decode("utf-8", errors="replace")
+    page = parse_page_config(text)
+    if page is None:
+        _raise_if_expired(text, status)
+        status, raw = _post_redirect(settings, exchange, text, settings.ciam + _PROCESS)
+        if status != 200:
+            raise LoginError(f"the email code was refused ({status})\n{describe_sign_in_page(text, status)}")
+        text = raw.decode("utf-8", errors="replace")
+        page = parse_page_config(text)
+    return status, text, page
+
+
+def _raise_if_expired(html_text: str, status: int) -> None:
+    obj = _page_object(html_text)
+    if not isinstance(obj, dict):
+        return
+    code = obj.get("stsErrorCode")
+    if obj.get("pgid") == "ConvergedError" or code in {50089, "50089"}:
+        raise LoginError(f"the sign-in challenge expired\n{describe_sign_in_page(html_text, status)}")
+
+
+def _code_form(page: Mapping[str, object]) -> bool:
+    """The email-code page, as opposed to the confirmation or stay-signed-in page."""
+    if page.get("pgid") in {"CmsiInterrupt", "KmsiInterrupt"}:
+        return False
+    path = _post_path(_text(page, "urlPost")).rstrip("/")
+    if path.endswith(_KMSI) or path.endswith(_APP_VERIFY):
+        return False
+    return page.get("pgid") == "FabricTFA" or path.endswith("/ProcessAuth")
 
 
 def _is_app_verify(page: Mapping[str, object]) -> bool:
@@ -606,7 +647,7 @@ def _post_redirect(settings: Settings, exchange: Exchange, html_text: str, refer
     params = obj.get("oPostParams") if isinstance(obj, dict) else None
     posted = _text(obj, "urlPost") if isinstance(obj, dict) else ""
     if not isinstance(obj, dict) or not isinstance(params, dict) or not posted:
-        raise LoginError("the sign-in page did not include a flow token")
+        raise LoginError(f"the sign-in page did not include a flow token\n{describe_sign_in_page(html_text, 200)}")
     target = _ciam_url(settings, posted)
     if "sso_reload=" not in target:
         target += "&sso_reload=true" if urllib.parse.urlsplit(target).query else "?sso_reload=true"

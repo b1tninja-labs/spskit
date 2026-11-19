@@ -297,6 +297,33 @@ def test_a_confirmation_page_is_posted_before_stay_signed_in():
     assert submit_email_code(settings, requested, "abcd1234", exchange) == REDIRECT
 
 
+def test_an_expired_challenge_is_named():
+    settings = Settings(
+        "person@example.com",
+        "current-secret",
+        "https://gateway.example",
+        "https://ciam.example",
+        "",
+        Path("D:/data/spskit"),
+    )
+    requested = EmailRequest(
+        MfaChallenge(8, "flow-after-begin", "ctx-after-begin", "form-canary", "corr-begin", "person@example.com"),
+        "b" * 43,
+    )
+    expired = """<html><title>Sign in to your account</title><script>$Config={"pgid":"ConvergedError",
+"stsErrorCode":50089,"sessionId":"sess","correlationId":"corr","canary":"canary","apiCanary":"api",
+"strMainMessage":"flow-secret-value"};</script></html>"""
+
+    def exchange(_method, url, _body, _headers):
+        assert url.endswith("/ProcessAuth")
+        return 200, expired.encode()
+
+    with pytest.raises(LoginError, match="challenge expired") as caught:
+        submit_email_code(settings, requested, "abcd1234", exchange)
+    assert "flow-secret-value" not in str(caught.value)
+    assert "50089" in str(caught.value)
+
+
 def test_a_page_that_is_not_stay_signed_in_names_itself(tmp_path):
     settings = Settings(
         "person@example.com",

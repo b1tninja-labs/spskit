@@ -416,7 +416,11 @@ def run(
         return 0
     except (ConfigError, SessionExpiredError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
-        if args.command == "code" and str(exc) != "there is no email challenge waiting":
+        first_line = str(exc).splitlines()[0]
+        if args.command == "code" and first_line not in {
+            "there is no email challenge waiting",
+            "the sign-in challenge expired",
+        }:
             print("The challenge is still saved. Run python -m spskit code again.", file=sys.stderr)
         elif args.command == "login" and str(exc) == "the sign-in host closed the connection":
             print("Run python -m spskit login again.", file=sys.stderr)
