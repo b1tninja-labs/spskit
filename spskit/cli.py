@@ -12,7 +12,15 @@ import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 
 from spskit.catalog import LicensedModule
-from spskit.client import Exchange, fetch_module, list_modules, request_grant, submit_code
+from spskit.client import (
+    Exchange,
+    exchange_authorization_code,
+    fetch_module,
+    list_modules,
+    open_backend_session,
+    request_grant,
+    submit_code,
+)
 from spskit.config import ConfigError, load_settings
 from spskit.verify import SessionExpiredError, parse_challenge
 
@@ -47,9 +55,20 @@ def run(
     download = sub.add_parser("download", help="download every version of one licensed resource")
     download.add_argument("--id", required=True, help="decimal resource id")
     sub.add_parser("verify", help="read a verification challenge on stdin and prompt for the code")
+    token = sub.add_parser("token", help="exchange the TDS redirect for an access token")
+    token.add_argument("--redirect", required=True, help="the https://www.acdelcotds.com/#code=... URL")
     args = parser.parse_args(list(argv))
     try:
         settings = load_settings(pathlib.Path(args.env))
+        if args.command == "token":
+            access = exchange_authorization_code(settings, args.redirect, exchange)
+            open_backend_session(settings, access, exchange)
+            if settings.token_file is not None:
+                settings.token_file.write_text(access, encoding="utf-8")
+                print(f"wrote the access token to {settings.token_file}")
+            else:
+                print("TDS session accepted. Set TDS_TOKEN_FILE to keep the access token.")
+            return 0
         if args.command == "verify":
             raw = sys.stdin.read() if stdin_text is None else stdin_text
             payload = json.loads(raw)

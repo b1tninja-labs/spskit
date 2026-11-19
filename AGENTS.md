@@ -21,8 +21,8 @@ Use the pinned toolchain in `projecthub/src/projecthub/shells/requirements-dev.t
    `tests/test_roadmap_rows.py` checks it.
 2. **Secrets stay out of the tree.** `.env` is gitignored. `.env.example` has empty username, password and token.
    A verification code is read from the prompt and is not written to disk.
-3. **Do not send the password** until `sk.sign-in.password` is implemented from a captured request. Do not invent
-   the body of that request.
+3. **Do not send the password.** The captured password step is a reset and `signin.refuse_password_update()`
+   refuses it. Do not post `newPassword`.
 4. **No vehicle programming.** No security access, no calibration transfer, and no SAE J2534 pass-through until
    that document is in `primarysource`. Do not state an RFC or ISO section from memory; read it through
    `primarysource` first.

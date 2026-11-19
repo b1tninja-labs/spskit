@@ -16,8 +16,8 @@ own ACDelco TDS subscription is licensed for.
 
 ## 2. What it does not do
 
-- It does not send `TDS_PASSWORD` yet. The password stays in the environment until the sign-in step that carries
-  it has been read from a capture and written as its own row (`sk.sign-in.password`).
+- It does not send `TDS_PASSWORD`. The captured password step is a reset (`newPassword` after
+  `methodUpdateRequired`). That step is refused.
 - It does not talk to a vehicle. Programming a controller is a later step and needs the VCX/VXDIAG J2534
   pass-through. ISO 14229-1:2013 clause 15.4.4 names SAE J2534 as the link between the application and the
   service-tool hardware, and says the vehicle side uses manufacturer-proprietary information. SAE J2534 is not
@@ -33,6 +33,7 @@ From this directory:
     python -m spskit modules --id 25
     python -m spskit download --id 25
     python -m spskit verify < challenge.json
+    python -m spskit token --redirect "https://www.acdelcotds.com/#code=..."
 
 `verify` reads the challenge the sign-in host returned and prompts for the code. Fill in `.env` on this machine.
 Do not commit it.

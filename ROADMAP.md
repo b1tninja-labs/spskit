@@ -45,7 +45,11 @@ so this package does not speak to a vehicle.
 
 | Id | Obligation | Spec | Status | Evidence |
 |---|---|---|---|---|
-| `sk.sign-in.password` | send `TDS_PASSWORD` only as the body of the sign-in step the host named, once that step has been read | captured password method | `[ ]` | (to be written) |
-| `sk.sign-in.token` | turn a continued sign-in into the gateway bearer `TDS_ACCESS_TOKEN` | captured token response | `[ ]` | (to be written) |
+| `sk.sign-in.password` | `signin.refuse_password_update()` refuses a new-password step and does not send the stored password | captured password update | `[ok]` | `tests/test_signin.py::test_a_new_password_step_is_refused` |
+| `sk.sign-in.code` | `signin.authorization_code()` reads the code from the TDS redirect fragment | captured redirect | `[ok]` | `tests/test_signin.py::test_the_redirect_code_is_the_fragment` |
+| `sk.sign-in.form` | `signin.token_form()` is the authorization-code form and has no password field | captured token request | `[ok]` | `tests/test_signin.py::test_the_token_form_has_no_password_field` |
+| `sk.sign-in.token` | `signin.parse_access_token()` keeps the access token and drops the refresh token | captured token response | `[ok]` | `tests/test_signin.py::test_the_access_token_is_kept_and_the_refresh_token_is_dropped` |
+| `sk.sign-in.session` | `client.open_backend_session()` posts an empty body and the access-token header | captured TDS login | `[ok]` | `tests/test_signin.py::test_the_code_is_exchanged_and_the_profile_is_discarded` |
+| `sk.cli.token` | `cli.run()` writes the access token to the token file and does not print it | captured token response | `[ok]` | `tests/test_cli.py::test_token_command_writes_the_token_and_does_not_print_it` |
 | `sk.no.vehicle` | do not program a controller, calculate a seed or key, or speak SAE J2534 until that document is imported into primarysource | ISO 14229-1:2013 clause 15.4.4 | `[no]` | the package has no pass-through and no programming service |
 | `sk.no.security-access` | security access and transfer of a calibration stay out of this package | owner decision | `[no]` | same boundary as the volt research notes |

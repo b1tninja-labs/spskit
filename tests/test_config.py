@@ -15,6 +15,8 @@ def test_the_example_names_the_secrets_and_leaves_them_empty():
     assert values["TDS_USERNAME"] == ""
     assert values["TDS_PASSWORD"] == ""
     assert values["TDS_ACCESS_TOKEN"] == ""
+    assert values["TDS_CODE_VERIFIER"] == ""
+    assert values["TDS_TOKEN_FILE"] == ""
     assert values["TDS_GATEWAY"].startswith("https://")
     assert values["SPS_DOWNLOAD_DIR"]
     assert ".env" in (ROOT / ".gitignore").read_text(encoding="utf-8")

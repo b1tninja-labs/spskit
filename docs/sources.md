@@ -10,8 +10,19 @@ The sign-in host is `gmb2bciamprod.ciamlogin.com`. When it wants an email code i
 on that host. The verify call posts `continuationToken` and `otp`. A continued sign-in returns
 `state` `continue`.
 
-The password is not sent by this package. A captured password-reset call posted `newPassword` and is
-not the login step, so it is not implemented.
+The password call that follows verification is a reset. `recover` returns `state` `methodUpdateRequired`
+and an `update` link. The update posts `continuationToken` and `newPassword`. This package refuses that
+step and does not send `TDS_PASSWORD`.
+
+## Access token
+
+The browser lands on `https://www.acdelcotds.com/#code=...`. The token call is
+`POST /{tenant}/oauth2/v2.0/token` with form fields `client_id`, `redirect_uri`, `scope`, `code`,
+`code_verifier`, `grant_type=authorization_code` and `client_info=1`. The response has `token_type`,
+`access_token` and `refresh_token`. Only the access token is kept.
+
+`POST https://backend.acdelcotds.com/api/v1/login?zoneId=America/Los_Angeles` sends that token in
+`X-EEID-Access-Token` and an empty body. The profile in the response is discarded.
 
 ## Gateway
 

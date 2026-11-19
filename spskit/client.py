@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import urllib.parse
 from collections.abc import Callable, Mapping
 from typing import Protocol
 
@@ -15,6 +16,7 @@ from spskit.download import (
     parse_grant,
     save_bytes,
 )
+from spskit.signin import authorization_code, parse_access_token, refuse_password_update, token_form
 from spskit.verify import SessionExpiredError, VerificationChallenge, challenge_from_body, otp_message, prompt_code
 
 
@@ -90,9 +92,48 @@ def submit_code(
     payload = json.loads(raw.decode("utf-8"))
     if not isinstance(payload, dict):
         raise SessionExpiredError("verification response is not an object")
+    refuse_password_update(payload)
     if payload.get("state") != "continue":
         again = challenge_from_body(payload)
         if again is not None:
             raise SessionExpiredError("the host asked for the code again")
         raise SessionExpiredError("verification did not continue")
     return payload
+
+
+def exchange_authorization_code(settings: Settings, redirect_url: str, exchange: Exchange) -> str:
+    """Trade the redirect code for an access token. The refresh token in the response is discarded."""
+    if not settings.code_verifier:
+        raise SessionExpiredError("TDS_CODE_VERIFIER is empty")
+    form = token_form(
+        settings.client_id, settings.redirect_uri, authorization_code(redirect_url), settings.code_verifier
+    )
+    if settings.password and settings.password in dict(form).values():
+        raise SessionExpiredError("refusing to send the stored password to the token endpoint")
+    url = f"{settings.ciam}/{settings.tenant}/oauth2/v2.0/token"
+    status, raw = exchange(
+        "POST",
+        url,
+        urllib.parse.urlencode(form).encode("utf-8"),
+        {"content-type": "application/x-www-form-urlencoded", "accept": "application/json"},
+    )
+    if status != 200:
+        raise SessionExpiredError(f"the token endpoint refused the code ({status})")
+    payload = json.loads(raw.decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise SessionExpiredError("token response is not an object")
+    return parse_access_token(payload)
+
+
+def open_backend_session(settings: Settings, access_token: str, exchange: Exchange) -> None:
+    """POST an empty body. The profile document in the response is not kept."""
+    zone = urllib.parse.quote(settings.zone, safe="")
+    url = f"{settings.backend}/api/v1/login?zoneId={zone}"
+    status, _raw = exchange(
+        "POST",
+        url,
+        None,
+        {"X-EEID-Access-Token": access_token, "accept": "application/json"},
+    )
+    if status != 200:
+        raise SessionExpiredError(f"TDS login was refused ({status})")

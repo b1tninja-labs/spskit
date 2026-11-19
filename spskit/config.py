@@ -8,6 +8,8 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from spskit.signin import PUBLIC_CLIENT_ID, REDIRECT_URI, TENANT_ID
+
 _KEY = re.compile(r"[A-Z][A-Z0-9_]*")
 _ASSIGN = re.compile(r"^(?:export\s+)?([A-Z][A-Z0-9_]*)=(.*)$")
 
@@ -26,6 +28,13 @@ class Settings:
     ciam: str
     access_token: str
     download_dir: pathlib.Path
+    client_id: str = PUBLIC_CLIENT_ID
+    tenant: str = TENANT_ID
+    redirect_uri: str = REDIRECT_URI
+    backend: str = "https://backend.acdelcotds.com"
+    zone: str = "America/Los_Angeles"
+    code_verifier: str = ""
+    token_file: pathlib.Path | None = None
 
 
 def parse_env_text(text: str) -> dict[str, str]:
@@ -57,7 +66,14 @@ def settings_from(env: Mapping[str, str]) -> Settings:
     """Build settings. Process environment should already have overridden the file."""
     gateway = env.get("TDS_GATEWAY", "https://tlc-dmz-gateway.ext.gm.com").rstrip("/")
     ciam = env.get("TDS_CIAM", "https://gmb2bciamprod.ciamlogin.com").rstrip("/")
-    for name, value in (("TDS_GATEWAY", gateway), ("TDS_CIAM", ciam)):
+    backend = env.get("TDS_BACKEND", "https://backend.acdelcotds.com").rstrip("/")
+    redirect_uri = env.get("TDS_REDIRECT_URI", REDIRECT_URI).rstrip("/")
+    for name, value in (
+        ("TDS_GATEWAY", gateway),
+        ("TDS_CIAM", ciam),
+        ("TDS_BACKEND", backend),
+        ("TDS_REDIRECT_URI", redirect_uri),
+    ):
         if not value.startswith("https://") or " " in value:
             raise ConfigError(f"{name} must be an https URL")
     raw_dir = env.get("SPS_DOWNLOAD_DIR", "").strip()
@@ -66,6 +82,10 @@ def settings_from(env: Mapping[str, str]) -> Settings:
     download_dir = pathlib.Path(raw_dir)
     if not download_dir.is_absolute():
         raise ConfigError("SPS_DOWNLOAD_DIR must be an absolute path outside the repository")
+    raw_token_file = env.get("TDS_TOKEN_FILE", "").strip()
+    token_file = pathlib.Path(raw_token_file) if raw_token_file else None
+    if token_file is not None and not token_file.is_absolute():
+        raise ConfigError("TDS_TOKEN_FILE must be an absolute path outside the repository")
     return Settings(
         username=env.get("TDS_USERNAME", ""),
         password=env.get("TDS_PASSWORD", ""),
@@ -73,6 +93,13 @@ def settings_from(env: Mapping[str, str]) -> Settings:
         ciam=ciam,
         access_token=env.get("TDS_ACCESS_TOKEN", "").strip(),
         download_dir=download_dir,
+        client_id=env.get("TDS_CLIENT_ID", PUBLIC_CLIENT_ID).strip() or PUBLIC_CLIENT_ID,
+        tenant=env.get("TDS_TENANT", TENANT_ID).strip() or TENANT_ID,
+        redirect_uri=redirect_uri,
+        backend=backend,
+        zone=env.get("TDS_ZONE", "America/Los_Angeles").strip() or "America/Los_Angeles",
+        code_verifier=env.get("TDS_CODE_VERIFIER", "").strip(),
+        token_file=token_file,
     )
 
 
