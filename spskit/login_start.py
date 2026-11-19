@@ -37,6 +37,14 @@ class LoginError(VerificationError):
     """The sign-in host did not accept the password or the email code."""
 
 
+class CodeRejectedError(LoginError):
+    """The code was wrong. `challenge` is the same sign-in, ready for another try."""
+
+    def __init__(self, challenge: MfaChallenge) -> None:
+        super().__init__("the sign-in host rejected that code")
+        self.challenge = challenge
+
+
 @dataclass(frozen=True, slots=True)
 class MfaChallenge:
     """What the code form posts, apart from the code itself. The code is not stored here."""
@@ -308,8 +316,10 @@ def submit_email_code(settings: Settings, requested: EmailRequest, code: str, ex
         if status != 200:
             raise LoginError(f"the email code was refused ({status})")
         page = parse_page_config(raw.decode("utf-8", errors="replace"))
-    if page is None or _error_code(page) == "InvalidOneTimePasscode":
+    if page is None:
         raise LoginError("the sign-in host rejected that code")
+    if _error_code(page) == "InvalidOneTimePasscode":
+        raise CodeRejectedError(_next_challenge(challenge, page))
     kmsi = [
         ("LoginOptions", "1"),
         ("type", "28"),
@@ -323,6 +333,20 @@ def submit_email_code(settings: Settings, requested: EmailRequest, code: str, ex
         raise LoginError("the email code was not accepted")
     status, raw = _form_call(exchange, _kmsi_url(settings, page), kmsi, settings.ciam + _PROCESS)
     return _redirect_url(status, raw)
+
+
+def _next_challenge(challenge: MfaChallenge, page: Mapping[str, object]) -> MfaChallenge:
+    """The rejection page carries the flow token for the next try. The email is not sent again."""
+    length = page.get("iEmailOtcLength")
+    code_length = length if isinstance(length, int) and 4 <= length <= 12 else challenge.code_length
+    return MfaChallenge(
+        code_length,
+        _text(page, "sFT") or challenge.flow_token,
+        _text(page, "sCtx") or challenge.request_ctx,
+        _text(page, "canary") or _text(page, "apiCanary") or challenge.canary,
+        _text(page, "correlationId") or challenge.hpg_request_id,
+        challenge.username,
+    )
 
 
 def _sso_reload(url: str) -> str:

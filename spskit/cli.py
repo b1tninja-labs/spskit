@@ -28,7 +28,15 @@ from spskit.client import (
     submit_code,
 )
 from spskit.config import ConfigError, load_settings
-from spskit.login_start import prompt_email_code, redirect_location, request_email_code, submit_email_code
+from spskit.login_start import (
+    CodeRejectedError,
+    EmailRequest,
+    LoginError,
+    prompt_email_code,
+    redirect_location,
+    request_email_code,
+    submit_email_code,
+)
 from spskit.session import (
     apply_saved_session,
     prompt_emailed_token,
@@ -147,9 +155,21 @@ def run(
         if args.command == "login":
             requested = request_email_code(settings, exchange)
             print(f"Email challenge sent ({requested.challenge.code_length} characters).")
-            code = prompt_email_code(requested.challenge.code_length, reader)
-            redirect = submit_email_code(settings, requested, code, exchange)
-            del code
+            while True:
+                try:
+                    code = prompt_email_code(requested.challenge.code_length, reader)
+                except LoginError as exc:
+                    print(str(exc), file=sys.stderr)
+                    continue
+                try:
+                    redirect = submit_email_code(settings, requested, code, exchange)
+                except CodeRejectedError as rejected:
+                    print("That code was rejected.", file=sys.stderr)
+                    requested = EmailRequest(rejected.challenge, requested.code_verifier)
+                    del code
+                    continue
+                del code
+                break
             settings = replace(settings, code_verifier=requested.code_verifier)
             access = exchange_authorization_code(settings, redirect, exchange)
             open_backend_session(settings, access, exchange)

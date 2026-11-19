@@ -9,6 +9,7 @@ import pytest
 from spskit.cli import run
 from spskit.config import Settings
 from spskit.login_start import (
+    CodeRejectedError,
     EmailRequest,
     LoginError,
     MfaChallenge,
@@ -167,8 +168,96 @@ def test_the_code_post_follows_the_redirect_before_it_is_judged(tmp_path):
             return 200, MFA.replace('"sErrorCode":"50074"', '"sErrorCode":"InvalidOneTimePasscode"').encode()
         return 200, interrupt.encode()
 
-    with pytest.raises(LoginError, match="rejected"):
+    with pytest.raises(CodeRejectedError, match="rejected") as caught:
         submit_email_code(settings, requested, "abcd1234", rejected)
+    assert caught.value.challenge.flow_token == "flow-after-password"
+
+
+def test_a_rejected_code_is_asked_again_without_a_new_email(tmp_path, capsys):
+    env = tmp_path / ".env"
+    env.write_text(
+        "\n".join(
+            [
+                "TDS_USERNAME=person@example.com",
+                "TDS_PASSWORD=current-secret",
+                "TDS_CIAM=https://ciam.example",
+                "TDS_BACKEND=https://backend.example",
+                "TDS_GATEWAY=https://gateway.example",
+                "SPS_DOWNLOAD_DIR=" + str(tmp_path / "out"),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    codes = iter(["00000000", "abcd1234"])
+    begins = 0
+    posts = 0
+    first_try = """
+<html><title>Redirecting</title><script>$Config={"stsErrorCode":"50168",
+"urlPost":"/common/SAS/ProcessAuth","oPostParams":{"otc":"00000000","canary":"form-canary",
+"flowToken":"flow-after-begin","request":"ctx-after-begin","login":"person@example.com",
+"hpgrequestid":"corr-begin","mfaAuthMethod":"Email"},
+"bsso":{"cookieNames":{"ssoPulled":"SSOCOOKIEPULLED"}}};</script></html>
+"""
+    second_try = first_try.replace("00000000", "abcd1234")
+    rejected_page = (
+        MFA.replace('"sErrorCode":"50074"', '"sErrorCode":"InvalidOneTimePasscode"')
+        .replace("flow-after-password", "flow-retry")
+        .replace("ctx-after-password", "ctx-retry")
+    )
+
+    def exchange(method, url, body, headers):
+        nonlocal begins, posts
+        if method == "GET":
+            return 200, PAGE.encode()
+        if url.endswith("/GetCredentialType"):
+            return 200, json.dumps({"IfExistsResult": 0, "FlowToken": "flow-2"}).encode()
+        if url.endswith("/login") and "sso_reload" not in url:
+            return 200, MFA.encode()
+        if url.endswith("/BeginAuth"):
+            begins += 1
+            return 200, json.dumps(
+                {
+                    "Success": True,
+                    "ErrCode": 0,
+                    "ResultValue": "Success",
+                    "FlowToken": "flow-after-begin",
+                    "Ctx": "ctx-after-begin",
+                    "CorrelationId": "corr-begin",
+                }
+            ).encode()
+        if url.endswith("/ProcessAuth") and "sso_reload" not in url:
+            posts += 1
+            posted = parse_qs(body.decode())
+            if posts == 1:
+                assert posted["flowToken"] == ["flow-after-begin"]
+                assert posted["otc"] == ["00000000"]
+                return 200, first_try.encode()
+            assert posted["flowToken"] == ["flow-retry"]
+            assert posted["request"] == ["ctx-retry"]
+            assert posted["otc"] == ["abcd1234"]
+            return 200, second_try.encode()
+        if "sso_reload=true" in url:
+            posted = parse_qs(body.decode())
+            if posted["otc"] == ["00000000"]:
+                return 200, rejected_page.encode()
+            return 200, KMSI.encode()
+        if url.endswith("/kmsi"):
+            return 302, REDIRECT.encode()
+        if url.endswith("/token"):
+            return 200, json.dumps({"token_type": "Bearer", "access_token": TOKEN}).encode()
+        assert headers["X-EEID-Access-Token"] == TOKEN
+        return 200, b"{}"
+
+    def reader(prompt: str) -> str:
+        assert "email code" in prompt
+        return next(codes)
+
+    assert run(["--env", str(env), "login"], exchange, reader) == 0
+    assert begins == 1
+    assert posts == 2
+    assert "That code was rejected." in capsys.readouterr().err
+    saved = json.loads((tmp_path / "out" / "session.json").read_text(encoding="utf-8"))
+    assert saved["access_token"] == TOKEN
 
 
 def test_a_page_without_a_flow_token_is_skipped():
