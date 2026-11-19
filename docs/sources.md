@@ -180,8 +180,8 @@ and main class `org.springframework.boot.loader.JarLauncher`. The manifest `Star
 Boot 2.5.12. That class reads its own arguments, installs a bundled trust store, and opens the
 JavaFX application `TumJavafxApplication`.
 
-TUM's `StartupArg` has fifteen values, not the launcher's thirteen. After the shared login fields
-it expects `ACCESS_TOKEN`, `REFRESH_TOKEN`, `GATEWAY_URI`, `VIN`, and `CLIENT_TYPE`
+TUM's `StartupArg` also has thirteen values. After the shared login fields it expects
+`ACCESS_TOKEN`, `REFRESH_TOKEN`, `GATEWAY_URI`, `VIN`, and `CLIENT_TYPE`
 (`TLC_CLIENT`, `SDV_CLIENT`, `DPS_CLIENT`, or unknown). `AppLauncherService` picks a strategy from
 `CLIENT_TYPE`. `TLC_CLIENT` asks the authentication service for a TLC token and then starts
 `cmd /C` plus `TechlineConnectLaunch.exe` under the Techline Connect program directory, passing
