@@ -324,14 +324,20 @@ def submit_email_code(settings: Settings, requested: EmailRequest, code: str, ex
         ("LoginOptions", "1"),
         ("type", "28"),
         ("ctx", _text(page, "sCtx")),
-        ("hpgrequestid", _text(page, "correlationId")),
+        ("hpgrequestid", _text(page, "sessionId")),
         ("flowToken", _text(page, "sFT")),
         ("canary", _text(page, "canary") or _text(page, "apiCanary")),
         ("i19", "0"),
     ]
     if not all(value for name, value in kmsi if name != "i19"):
         raise LoginError("the email code was not accepted")
-    status, raw = _form_call(exchange, _kmsi_url(settings, page), kmsi, settings.ciam + _PROCESS)
+    status, raw = _form_call(
+        exchange,
+        _kmsi_url(settings, page),
+        kmsi,
+        settings.ciam + _PROCESS,
+        {"origin": settings.ciam},
+    )
     return _redirect_url(status, raw)
 
 

@@ -35,7 +35,7 @@ MFA = """
 
 KMSI = """
 <html><script>$Config={"sFT":"flow-kmsi","sCtx":"ctx-kmsi","canary":"canary-kmsi",
-"correlationId":"corr-kmsi","pgid":"KmsiInterrupt","urlPost":"/kmsi","sErrorCode":"50140"};</script></html>
+"correlationId":"corr-kmsi","sessionId":"sess-kmsi","pgid":"KmsiInterrupt","urlPost":"/kmsi","sErrorCode":"50140"};</script></html>
 """
 
 REDIRECT = "https://www.acdelcotds.com/#code=example-authorization-code"
@@ -368,6 +368,7 @@ def test_login_posts_the_password_then_waits_for_the_email_code(tmp_path, capsys
             form = parse_qs(posted)
             assert form["LoginOptions"] == ["1"]
             assert form["type"] == ["28"]
+            assert form["hpgrequestid"] == ["sess-kmsi"]
             assert form["flowToken"] == ["flow-kmsi"]
             assert "otc" not in form
             assert "current-secret" not in posted

@@ -32,7 +32,7 @@ and its `oPostParams` include `otc`. Posting that form to `urlPost` with `sso_re
 `InvalidOneTimePasscode`. An accepted code is `KmsiInterrupt` (`sErrorCode` `50140`, `urlPost` `/kmsi`).
 `InvalidOneTimePasscode` keeps the same email and returns a new flow token; the command asks again
 and does not call `BeginAuth` a second time.
-`POST /kmsi` sends `LoginOptions=1`, `type=28`, `ctx`, `hpgrequestid`, `flowToken`, `canary` and `i19`.
+`POST /kmsi` sends `LoginOptions=1`, `type=28`, `ctx`, `hpgrequestid` from the page `sessionId`, `flowToken`, `canary` and `i19`.
 The response is a 302 whose `Location` is `https://www.acdelcotds.com/#code=...`.
 
 A separate captured path, not used by `spskit login`, is password recovery. That JSON challenge has
