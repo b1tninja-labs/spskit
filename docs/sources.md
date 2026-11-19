@@ -82,10 +82,35 @@ on `cdlPermission` is ignored.
 `headers`, `md5` and `filename`). The response fills `url`, `filename` and `headers` (a `Cookie`
 when the file needs one). The file is fetched from that https URL.
 
-The captured calls did not send an `Authorization` header. `TDS_ACCESS_TOKEN`, when set, is sent as
-a bearer because a later licensed call may require the session the child-token call returns. An empty
-token sends no authorization header. The captured browser sent `User-Agent` for Chrome 157 on Windows.
-This client sends that same agent. It does not send `Python-urllib`.
+The 2026-11-19 gateway captures returned 200 with no `Authorization` header and no `X-` request
+header in the export. Chrome's HAR export also omitted `Cookie` and `Set-Cookie`, so those names
+are not in the files. A live check after the same SPOREF handoff showed the names the gateway set:
+`SPS-INFO_ACCESS_TOKEN`, `GMWP_location`, `_abck`, `bm_sz`, `AKA_A2` and `ak_bmsc`. Sending only
+those cookies, with no `Authorization` header, was a 401. Sending the `SPS-INFO_ACCESS_TOKEN` value
+as `Authorization: Bearer` was a 200 on `GET /acl/cdl/resources/25/permissions`, including when the
+jar was empty. The EEID access token is not that bearer. It stays on `backend.acdelcotds.com` as
+`X-EEID-Access-Token`.
+
+Before those ACL calls, when an access token is loaded, the client repeats the SPOREF handoff:
+`GET /api/v1/spsCallibration/accessSPSCal` (EEID header on the backend) and
+`POST /authorization/oauth/user/sporef/ui` (no EEID header). It then reads `SPS-INFO_ACCESS_TOKEN`
+from the jar and sends that value as the gateway bearer. A gateway 401 is reported as a refused
+gateway session, not as an expired TDS session.
+
+In the download capture the order is: an Akamai sensor `POST` (201), then
+`GET /acl/cdl/resources/25/permissions` (200), then `POST /cdn/files/public/downloadCredentials`
+(200), then `HEAD` of the CDN object (200), then `GET /oauth/user/token/child?tokenType=sps-info`
+(200, response key `accessToken`). The child-token call is after permissions and
+`downloadCredentials`, so it does not establish those calls. The request body field `tokenType` is
+three characters; the value is not stored. The grant's `headers` object uses the name `Cookie` for
+the CDN fetch.
+
+The other capture is SPS Info, also with no `Authorization` header: captcha id, image, and validate,
+then `GET /spsinfo/vin/fixture/{vin}`, then `POST /spsinfo/progseq`. Neither capture contains the
+SPOREF post itself.
+
+The captured browser sent `User-Agent` for Chrome 157 on Windows. This client sends that same agent.
+It does not send `Python-urllib`.
 
 ## Licensed files
 
@@ -128,11 +153,18 @@ The same page downloads the installer with `POST /cdn/files/public/downloadCrede
 `TLC Installer` `26.8.31.0` `INITIAL_SOFTWARE`. The file is
 `https://tlc-cdn.gm.com/cache-downloads/public/Prod/TLC_Installer/26_8_31_0/TLCSuite.exe`.
 
-`TLCSuite.exe` installs three pieces: a bundled JDK, `TLCLauncher.exe`, and `TUM.exe`. jadx 1.5.6
-on the classes inside those two programs shows the handoff. The programs and the decompiled tree
-are kept in `local/tlc/`, which is gitignored. All three extracted executables are Launch4j stubs
-with a jar appended. Ghidra is for a later native program, such as `TechlineConnectLaunch.exe`,
-which is not in this installer.
+`TLCSuite.exe` installs three pieces: a bundled JDK, `TLCLauncher.exe`, and `TUM.exe`. The file
+layout, the binwalk hits, the Ghidra view of the stub, and the gateway calls inside TUM are
+recorded in [tlc-binaries.md](tlc-binaries.md). The programs, the extracted jars, and the
+decompiled tree are kept in `local/tlc/`, which is gitignored.
+
+TUM calls the gateway with `Authorization: bearer` plus its own access token, and
+`Content-Type: application/json`. It refreshes that token at `GET /oauth/user/token/refresh`
+and asks for a child token at `GET /oauth/user/token/child` with `tokenType` `tlc`. The production
+base URL in its `application.yml` is `https://tlc-dmz-gateway.ext.gm.com`. Its download call is
+`POST /cdn/files/downloadCredentials`, and its catalog calls are `GET /acl/cdl/permissions/search`
+and `GET /acl/cdl/resources/prelaunch`. The web launcher uses a different download path and
+resource 25. TUM's own resource id constant is `1`.
 
 `TLCLauncher.exe` is `com.gm.cca.tlc.launcher.Main` from `tlc-launcher-client` 26.4.23.0. `main`
 strips the `tlc:,` prefix, splits on commas, and requires one field per `StartupArg` value. A
@@ -164,7 +196,10 @@ later download, so it is the next program to open with jadx.
 
 `GET /api/v1/spsCallibration/accessSPSCal` returns the SPOREF Redirection page. The form posts to
 `/authorization/oauth/user/sporef/ui` with `appParm` `sps2info`. The response sets a cookie named
-`SPS-INFO_ACCESS_TOKEN`. That cookie is the bearer on the calls below. The value is not written to the catalog.
+`SPS-INFO_ACCESS_TOKEN`. `spskit sps` reads that cookie and sends its value as the bearer on the fixture
+and programming-sequence calls, then drops the cookie. The 2026-11-19 export of those calls does not
+include an `Authorization` header. Gateway ACL calls do not send this cookie, or the EEID token, as
+`Authorization`. The value is not written to the catalog.
 
 `GET /spsinfo/vin/fixture/{vin}` returns `controllerReferenceTree` and `spsvin`. `referenceTree` is a list of
 controllers. A controller is `[display name, functions]`. The display name has `controllerCode`, `controllerLabel`

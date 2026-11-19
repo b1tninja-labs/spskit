@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from spskit.catalog import parse_permissions
-from spskit.client import auth_headers, list_modules
+from spskit.client import acl_headers, list_modules
 from spskit.config import Settings
 
 PERMISSIONS = {
@@ -33,7 +33,7 @@ def test_permissions_drop_the_account_id():
     assert "person@example.com" not in repr(modules[0])
 
 
-def test_listing_sends_a_bearer_only_when_one_was_supplied(tmp_path):
+def test_listing_does_not_send_the_saved_access_token(tmp_path):
     captured: list[dict[str, str]] = []
 
     def exchange(method, url, body, headers):
@@ -45,8 +45,17 @@ def test_listing_sends_a_bearer_only_when_one_was_supplied(tmp_path):
 
     found = list_modules(_settings(tmp_path), "25", exchange)
     assert found[0].type_code == "SOFTWARE"
-    assert "authorization" not in captured[0]
+    assert "authorization" not in {name.lower() for name in captured[0]}
     captured.clear()
     list_modules(_settings(tmp_path, token="token-1"), "25", exchange)
-    assert captured[0]["authorization"] == "Bearer token-1"
-    assert auth_headers(_settings(tmp_path)) == {"accept": "application/json"}
+    sent = {name.lower(): value for name, value in captured[0].items()}
+    assert "authorization" not in sent
+    assert "token-1" not in json.dumps(sent)
+    captured.clear()
+    list_modules(_settings(tmp_path, token="token-1"), "25", exchange, "gateway-session")
+    sent = {name.lower(): value for name, value in captured[0].items()}
+    assert sent["authorization"] == "Bearer gateway-session"
+    assert "x-eeid-access-token" not in sent
+    assert "token-1" not in json.dumps(sent)
+    assert acl_headers() == {"accept": "application/json"}
+    assert acl_headers("gateway-session")["authorization"] == "Bearer gateway-session"

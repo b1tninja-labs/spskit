@@ -65,7 +65,9 @@ def test_an_expired_session_is_reported_without_prompting(tmp_path, capsys):
 
     code = run(["--env", str(env), "modules", "--id", "25"], exchange, lambda _prompt: "nope")
     assert code == 2
-    assert "expired" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "the gateway refused the session" in err
+    assert "TDS session expired" not in err
 
 
 def test_token_command_writes_the_token_and_does_not_print_it(tmp_path, capsys):
@@ -102,10 +104,15 @@ def test_token_command_writes_the_token_and_does_not_print_it(tmp_path, capsys):
     assert json.loads(token_file.read_text(encoding="utf-8"))["access_token"] == "access-token-value-0001"
 
 
-def test_session_prompts_for_the_emailed_token_and_later_commands_send_it(tmp_path, capsys):
+def test_session_prompts_for_the_emailed_token_and_later_gateway_calls_omit_it(tmp_path, capsys):
     env = tmp_path / ".env"
     download = tmp_path / "out"
-    env.write_text("SPS_DOWNLOAD_DIR=" + str(download) + "\n", encoding="utf-8")
+    env.write_text(
+        "SPS_DOWNLOAD_DIR="
+        + str(download)
+        + "\nTDS_GATEWAY=https://gateway.example\nTDS_BACKEND=https://backend.example\n",
+        encoding="utf-8",
+    )
     emailed = "access-token-from-email"
 
     def reader(prompt: str) -> str:
@@ -119,10 +126,29 @@ def test_session_prompts_for_the_emailed_token_and_later_commands_send_it(tmp_pa
     assert saved == {"access_token": emailed}
 
     def exchange(method, url, body, headers):
+        lowered = {name.lower(): value for name, value in headers.items()}
+        if url.endswith("/api/tds-backend"):
+            assert method == "GET"
+            return 200, b"header.payload.signature"
+        if url.endswith("/spsCallibration/accessSPSCal"):
+            assert method == "GET"
+            assert lowered["x-eeid-access-token"] == emailed
+            assert lowered["authorization"] == "Bearer header.payload.signature"
+            return 200, (
+                b'<form method="POST" action="https://gateway.example/authorization/oauth/user/sporef/ui">'
+                b'<input name="appParm" value="sps2info"></form>'
+            )
+        if url.endswith("/sporef/ui"):
+            assert method == "POST"
+            assert "authorization" not in lowered
+            assert emailed not in json.dumps(lowered)
+            return 200, b"<html></html>"
         assert method == "GET"
         assert url.endswith("/permissions")
         assert body is None
-        assert headers["authorization"] == "Bearer " + emailed
+        assert "authorization" not in lowered
+        assert "x-eeid-access-token" not in lowered
+        assert emailed not in json.dumps(lowered)
         return 200, json.dumps(
             {
                 "resourceVersions": [
@@ -291,3 +317,56 @@ def test_a_saved_token_retries_the_backend_without_a_new_code(tmp_path, capsys):
     assert "backend_pending" not in saved
     assert "stay" not in saved
     assert "access-token-value-0001" not in capsys.readouterr().out
+
+
+def test_gateway_cookie_names_are_only_names():
+    import time
+    from http.cookiejar import Cookie
+
+    from spskit.cli import _JAR, gateway_cookie_names
+
+    _JAR.clear()
+    _JAR.set_cookie(
+        Cookie(
+            0,
+            "SPS-INFO_ACCESS_TOKEN",
+            "not-a-value-to-print",
+            None,
+            False,
+            "gateway.example",
+            True,
+            False,
+            "/",
+            True,
+            True,
+            int(time.time()) + 60,
+            False,
+            None,
+            None,
+            {},
+        )
+    )
+    _JAR.set_cookie(
+        Cookie(
+            0,
+            "OTHER",
+            "elsewhere",
+            None,
+            False,
+            "backend.example",
+            True,
+            False,
+            "/",
+            True,
+            True,
+            int(time.time()) + 60,
+            False,
+            None,
+            None,
+            {},
+        )
+    )
+    names = gateway_cookie_names("gateway.example")
+    assert names == ["SPS-INFO_ACCESS_TOKEN"]
+    assert "not-a-value-to-print" not in names
+    _JAR.clear()

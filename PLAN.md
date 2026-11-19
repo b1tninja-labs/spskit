@@ -21,7 +21,9 @@ own ACDelco TDS subscription is licensed for.
 - `spskit session` prompts for an access token the person already holds and writes it to
   `SPS_DOWNLOAD_DIR/session.json`, or to `TDS_TOKEN_FILE` when that absolute path is set. Later commands
   load it when `TDS_ACCESS_TOKEN` is empty.
-- A gateway 401 is reported as an expired session. The command does not invent a code to send.
+- A gateway 401 is reported as a refused gateway session. The command does not invent a code to send.
+  Gateway ACL calls send the `SPS-INFO_ACCESS_TOKEN` cookie from the SPOREF handoff as `Authorization`.
+  They do not send the EEID access token.
 
 ## 2. What it does not do
 

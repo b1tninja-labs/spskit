@@ -48,11 +48,15 @@ class Exchange(Protocol):
     def __call__(self, method: str, url: str, body: bytes | None, headers: Mapping[str, str]) -> tuple[int, bytes]: ...
 
 
-def auth_headers(settings: Settings) -> dict[str, str]:
-    """Send a bearer only when the person supplied one. An empty token is not a header."""
+def acl_headers(bearer: str = "") -> dict[str, str]:
+    """Gateway ACL and downloadCredentials.
+
+    ``bearer`` is the SPS-INFO_ACCESS_TOKEN cookie from the SPOREF handoff. The EEID access
+    token is the credential for backend.acdelcotds.com and is not sent here.
+    """
     headers = {"accept": "application/json"}
-    if settings.access_token:
-        headers["authorization"] = f"Bearer {settings.access_token}"
+    if bearer:
+        headers["authorization"] = f"Bearer {bearer}"
     return headers
 
 
@@ -62,7 +66,7 @@ def permissions_url(settings: Settings, raw_id: str) -> str:
 
 def _json_body(status: int, raw: bytes) -> Mapping[str, object]:
     if status == 401:
-        raise SessionExpiredError("the TDS session expired")
+        raise SessionExpiredError("the gateway refused the session")
     if status != 200:
         raise CatalogError(f"gateway status {status}")
     payload = json.loads(raw.decode("utf-8"))
@@ -71,30 +75,30 @@ def _json_body(status: int, raw: bytes) -> Mapping[str, object]:
     return payload
 
 
-def list_modules(settings: Settings, raw_id: str, exchange: Exchange) -> list[LicensedModule]:
-    status, raw = exchange("GET", permissions_url(settings, raw_id), None, auth_headers(settings))
+def list_modules(settings: Settings, raw_id: str, exchange: Exchange, bearer: str = "") -> list[LicensedModule]:
+    status, raw = exchange("GET", permissions_url(settings, raw_id), None, acl_headers(bearer))
     return parse_permissions(_json_body(status, raw))
 
 
-def search_access(settings: Settings, exchange: Exchange) -> list[ResourceAccess]:
+def search_access(settings: Settings, exchange: Exchange, bearer: str = "") -> list[ResourceAccess]:
     """POST the launcher's permissions search. The body is an empty object."""
-    headers = auth_headers(settings)
+    headers = acl_headers(bearer)
     headers["content-type"] = "application/json"
     status, raw = exchange("POST", f"{settings.gateway}/acl/permissions/search", b"{}", headers)
     return parse_resource_access(_json_body(status, raw))
 
 
-def licensed_downloads(settings: Settings, exchange: Exchange) -> list[LicensedModule]:
+def licensed_downloads(settings: Settings, exchange: Exchange, bearer: str = "") -> list[LicensedModule]:
     """The Techline Connect installer and any other decimal resource this account can run."""
     modules: list[LicensedModule] = []
-    for raw_id in download_ids(search_access(settings, exchange)):
-        modules.extend(list_modules(settings, raw_id, exchange))
+    for raw_id in download_ids(search_access(settings, exchange, bearer)):
+        modules.extend(list_modules(settings, raw_id, exchange, bearer))
     return modules
 
 
-def request_grant(settings: Settings, module: LicensedModule, exchange: Exchange) -> DownloadGrant:
+def request_grant(settings: Settings, module: LicensedModule, exchange: Exchange, bearer: str = "") -> DownloadGrant:
     body = json.dumps(credentials_body(module)).encode("utf-8")
-    headers = auth_headers(settings)
+    headers = acl_headers(bearer)
     headers["content-type"] = "application/json"
     status, raw = exchange("POST", settings.gateway + CREDENTIALS_PATH, body, headers)
     return parse_grant(_json_body(status, raw))
@@ -406,6 +410,15 @@ def request_sps_form(settings: Settings, exchange: Exchange) -> SporefForm:
     if status != 200:
         raise SessionExpiredError(f"SPS Info was refused ({status}; {_backend_error(raw)})")
     return parse_sporef_form(raw)
+
+
+def open_gateway_session(settings: Settings, exchange: Exchange) -> None:
+    """Post the SPOREF handoff so the gateway can set session cookies.
+
+    The EEID access token is sent only on the backend page that returns the form.
+    The gateway post does not carry it as Authorization.
+    """
+    submit_sporef_form(settings, request_sps_form(settings, exchange), exchange)
 
 
 def submit_sporef_form(settings: Settings, form: SporefForm, exchange: Exchange) -> None:

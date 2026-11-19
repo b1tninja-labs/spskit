@@ -30,13 +30,14 @@ from spskit.client import (
     licensed_downloads,
     list_modules,
     open_backend_session,
+    open_gateway_session,
     request_grant,
     request_sps_form,
     submit_code,
     submit_sporef_form,
     sync_sps_vin,
 )
-from spskit.config import ConfigError, load_settings
+from spskit.config import ConfigError, Settings, load_settings
 from spskit.login_start import (
     BROWSER_USER_AGENT,
     CodeRejectedError,
@@ -218,6 +219,33 @@ def urllib_exchange(
                 raise LoginError("the sign-in host closed the connection") from exc
             print("the sign-in host closed the connection; retrying", file=sys.stderr)
             sleeper(delay)
+
+
+def gateway_cookie_names(host: str) -> list[str]:
+    """Cookie names the gateway set. Values stay in the jar and are not returned."""
+    host = host.lower()
+    names: list[str] = []
+    for cookie in _JAR:
+        domain = (cookie.domain or "").lstrip(".").lower()
+        if not domain or (host != domain and not host.endswith("." + domain)):
+            continue
+        if cookie.name not in names:
+            names.append(cookie.name)
+    return names
+
+
+def _gateway_bearer(settings: Settings, exchange: Exchange) -> str:
+    """Read the SPOREF cookie and use it as the gateway bearer. The EEID token is not.
+
+    A test exchange does not store Set-Cookie, so it returns an empty bearer. The real
+    transport reads SPS-INFO_ACCESS_TOKEN from the jar after the handoff.
+    """
+    if not settings.access_token:
+        return ""
+    open_gateway_session(settings, exchange)
+    if exchange is not urllib_exchange:
+        return ""
+    return sps_info_bearer()
 
 
 def sps_info_bearer() -> str:
@@ -465,24 +493,27 @@ def run(
             )
             print(catalog.path)
             return 0
+        bearer = ""
+        if args.command in {"downloads", "modules", "download"}:
+            bearer = _gateway_bearer(settings, exchange)
         if args.command == "downloads":
-            found = licensed_downloads(settings, exchange)
+            found = licensed_downloads(settings, exchange, bearer)
             if args.fetch:
                 for module in found:
-                    grant = request_grant(settings, module, exchange)
+                    grant = request_grant(settings, module, exchange, bearer)
                     fetch_module(settings, grant, exchange)
                     print(f"wrote {settings.download_dir / grant.filename}")
                 return 0
             for module in found:
                 print(format_module(module))
             return 0
-        found = list_modules(settings, args.id, exchange)
+        found = list_modules(settings, args.id, exchange, bearer)
         if args.command == "modules":
             for module in found:
                 print(format_module(module))
             return 0
         for module in found:
-            grant = request_grant(settings, module, exchange)
+            grant = request_grant(settings, module, exchange, bearer)
             fetch_module(settings, grant, exchange)
             print(f"wrote {settings.download_dir / grant.filename}")
         return 0

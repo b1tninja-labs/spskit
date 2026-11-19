@@ -4,7 +4,7 @@ import json
 
 from spskit.catalog import parse_resource_access
 from spskit.cli import run
-from spskit.client import licensed_downloads
+from spskit.client import licensed_downloads, list_modules, open_gateway_session
 from spskit.config import Settings
 
 SEARCH = {
@@ -54,7 +54,8 @@ def test_the_installer_and_a_decimal_resource_are_listed(tmp_path):
 
     def exchange(method, url, body, headers):
         asked.append(url)
-        assert headers["authorization"] == "Bearer token-1"
+        assert "authorization" not in {name.lower() for name in headers}
+        assert "token-1" not in json.dumps(dict(headers))
         if method == "POST":
             assert url.endswith("/acl/permissions/search")
             assert body == b"{}"
@@ -82,10 +83,33 @@ def test_the_installer_and_a_decimal_resource_are_listed(tmp_path):
 def test_downloads_lists_and_get_writes_the_file(tmp_path, capsys):
     env = tmp_path / ".env"
     out = tmp_path / "out"
-    env.write_text("SPS_DOWNLOAD_DIR=" + str(out) + "\nTDS_ACCESS_TOKEN=token-1\n", encoding="utf-8")
+    env.write_text(
+        "SPS_DOWNLOAD_DIR="
+        + str(out)
+        + "\nTDS_ACCESS_TOKEN=token-1\nTDS_GATEWAY=https://gateway.example\nTDS_BACKEND=https://backend.example\n",
+        encoding="utf-8",
+    )
 
     def exchange(method, url, body, headers):
-        assert "person@example.com" not in json.dumps(dict(headers))
+        lowered = {name.lower(): value for name, value in headers.items()}
+        assert "person@example.com" not in json.dumps(lowered)
+        if url.endswith("/api/tds-backend"):
+            return 200, b"header.payload.signature"
+        if url.endswith("/spsCallibration/accessSPSCal"):
+            assert lowered["x-eeid-access-token"] == "token-1"
+            assert lowered["authorization"] == "Bearer header.payload.signature"
+            return 200, (
+                b'<form method="POST" action="https://gateway.example/authorization/oauth/user/sporef/ui">'
+                b'<input name="appParm" value="sps2info"></form>'
+            )
+        if url.endswith("/sporef/ui"):
+            assert "authorization" not in lowered
+            assert "x-eeid-access-token" not in lowered
+            assert "token-1" not in json.dumps(lowered)
+            return 200, b"<html></html>"
+        if "gateway.example" in url:
+            assert "authorization" not in lowered
+            assert "x-eeid-access-token" not in lowered
         if url.endswith("/acl/permissions/search"):
             assert body == b"{}"
             return 200, json.dumps(SEARCH).encode()
@@ -118,3 +142,54 @@ def test_downloads_lists_and_get_writes_the_file(tmp_path, capsys):
     assert code == 0
     assert (out / "TLCSuite.exe").read_bytes() == b"installer-bytes"
     assert "token-1" not in capsys.readouterr().out
+
+
+def test_the_handoff_leaves_the_eeid_token_off_the_gateway(tmp_path):
+    token = "saved-access-token"
+    calls: list[str] = []
+
+    def exchange(method, url, body, headers):
+        calls.append(url)
+        lowered = {name.lower(): value for name, value in headers.items()}
+        if url.endswith("/api/tds-backend"):
+            assert method == "GET"
+            return 200, b"header.payload.signature"
+        if url.endswith("/spsCallibration/accessSPSCal"):
+            assert method == "GET"
+            assert lowered["x-eeid-access-token"] == token
+            assert lowered["authorization"].startswith("Bearer ")
+            return 200, (
+                b'<form method="POST" action="https://gateway.example/authorization/oauth/user/sporef/ui">'
+                b'<input name="appParm" value="sps2info"></form>'
+            )
+        if url.endswith("/sporef/ui"):
+            assert method == "POST"
+            assert "authorization" not in lowered
+            assert "x-eeid-access-token" not in lowered
+            assert token.encode() not in (body or b"")
+            return 200, b"<html></html>"
+        assert method == "GET"
+        assert url.endswith("/acl/cdl/resources/25/permissions")
+        assert "authorization" not in lowered
+        assert "x-eeid-access-token" not in lowered
+        assert token not in json.dumps(lowered)
+        return 200, json.dumps(_version("25", "TLC Installer")).encode()
+
+    settings = Settings(
+        "person",
+        "secret",
+        "https://gateway.example",
+        "https://ciam.example",
+        token,
+        tmp_path,
+        backend="https://backend.example",
+    )
+    open_gateway_session(settings, exchange)
+    found = list_modules(settings, "25", exchange)
+    assert found[0].name == "TLC Installer"
+    assert [url.rsplit("/", 1)[-1] for url in calls] == [
+        "tds-backend",
+        "accessSPSCal",
+        "ui",
+        "permissions",
+    ]
