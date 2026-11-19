@@ -8,7 +8,15 @@ import urllib.parse
 from collections.abc import Callable, Mapping
 from typing import Protocol
 
-from spskit.catalog import CatalogError, LicensedModule, parse_permissions, resource_id
+from spskit.catalog import (
+    CatalogError,
+    LicensedModule,
+    ResourceAccess,
+    download_ids,
+    parse_permissions,
+    parse_resource_access,
+    resource_id,
+)
 from spskit.config import Settings
 from spskit.download import (
     CREDENTIALS_PATH,
@@ -57,6 +65,22 @@ def _json_body(status: int, raw: bytes) -> Mapping[str, object]:
 def list_modules(settings: Settings, raw_id: str, exchange: Exchange) -> list[LicensedModule]:
     status, raw = exchange("GET", permissions_url(settings, raw_id), None, auth_headers(settings))
     return parse_permissions(_json_body(status, raw))
+
+
+def search_access(settings: Settings, exchange: Exchange) -> list[ResourceAccess]:
+    """POST the launcher's permissions search. The body is an empty object."""
+    headers = auth_headers(settings)
+    headers["content-type"] = "application/json"
+    status, raw = exchange("POST", f"{settings.gateway}/acl/permissions/search", b"{}", headers)
+    return parse_resource_access(_json_body(status, raw))
+
+
+def licensed_downloads(settings: Settings, exchange: Exchange) -> list[LicensedModule]:
+    """The Techline Connect installer and any other decimal resource this account can run."""
+    modules: list[LicensedModule] = []
+    for raw_id in download_ids(search_access(settings, exchange)):
+        modules.extend(list_modules(settings, raw_id, exchange))
+    return modules
 
 
 def request_grant(settings: Settings, module: LicensedModule, exchange: Exchange) -> DownloadGrant:

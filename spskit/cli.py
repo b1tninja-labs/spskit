@@ -27,6 +27,7 @@ from spskit.client import (
     Exchange,
     exchange_authorization_code,
     fetch_module,
+    licensed_downloads,
     list_modules,
     open_backend_session,
     request_grant,
@@ -327,6 +328,11 @@ def run(
     modules.add_argument("--id", required=True, help="decimal resource id")
     download = sub.add_parser("download", help="download every version of one licensed resource")
     download.add_argument("--id", required=True, help="decimal resource id")
+    downloads = sub.add_parser(
+        "downloads",
+        help="list licensed files, including the Techline Connect installer",
+    )
+    downloads.add_argument("--get", action="store_true", dest="fetch", help="download each listed file")
     sub.add_parser("login", help="sign in with the password and ask the host to email a code")
     sub.add_parser("code", help="enter the emailed code for the saved challenge")
     sub.add_parser("verify", help="prompt for the emailed code, or read a challenge on stdin")
@@ -418,6 +424,17 @@ def run(
                 challenge = parse_challenge(payload)
             result = submit_code(settings, challenge, reader, exchange)
             print(f"verification state: {result.get('state')}")
+            return 0
+        if args.command == "downloads":
+            found = licensed_downloads(settings, exchange)
+            if args.fetch:
+                for module in found:
+                    grant = request_grant(settings, module, exchange)
+                    fetch_module(settings, grant, exchange)
+                    print(f"wrote {settings.download_dir / grant.filename}")
+                return 0
+            for module in found:
+                print(format_module(module))
             return 0
         found = list_modules(settings, args.id, exchange)
         if args.command == "modules":

@@ -10,6 +10,8 @@ own ACDelco TDS subscription is licensed for.
 - Reads ACDelco / GM TDS settings from `.env`. `.env.example` ships with empty secrets. `.env` is gitignored.
 - Lists the versions of one resource the permissions call returns, and does not keep the account id.
 - Asks the gateway for a download grant and writes the file under `SPS_DOWNLOAD_DIR`, which must be an absolute path.
+- `spskit downloads` lists the Techline Connect installer and any other decimal resource the account can run.
+  `spskit downloads --get` writes those files in the same directory.
 - `spskit login` posts the password and asks the host to email a code. It writes the challenge to the
   session file and does not write the code. `spskit code` reads that challenge, waits for the code, and
   writes the access token from the redirect. A dropped connection retries, and `spskit code` can be
@@ -37,6 +39,8 @@ From this directory:
     copy .env.example .env
     python -m spskit modules --id 25
     python -m spskit download --id 25
+    python -m spskit downloads
+    python -m spskit downloads --get
     python -m spskit login
     python -m spskit code
     python -m spskit session

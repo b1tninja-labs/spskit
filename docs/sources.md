@@ -86,6 +86,19 @@ The captured calls did not send an `Authorization` header. `TDS_ACCESS_TOKEN`, w
 a bearer because a later licensed call may require the session the child-token call returns. An empty
 token sends no authorization header.
 
+## Licensed files
+
+The Techline Connect launcher lists what the signed-in account may open with
+`POST /acl/permissions/search` and a body of `{}`. The response is `resourcePermissions`, and each
+item has `resourceId` and `runnable`. A UUID is a launcher tab. A decimal id is a file. `userId` is
+not stored.
+
+The download button does not use that list for the installer. It always reads
+`GET /acl/cdl/resources/25/permissions` and posts the first `resourceVersion` to `downloadCredentials`.
+Resource 25 is `TLC Installer`, type `INITIAL_SOFTWARE`, and the grant's filename is `TLCSuite.exe`.
+`spskit downloads` asks for resource 25 and for any other decimal id the search marks runnable.
+`spskit downloads --get` saves every version those permission calls return, under `SPS_DOWNLOAD_DIR`.
+
 ## Techline Connect launch
 
 The TDS page does not start `TLCSuite.exe`. An access click calls

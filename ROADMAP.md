@@ -44,6 +44,14 @@ so this package does not speak to a vehicle.
 | `sk.download.grant` | `download.parse_grant()` accepts one https URL and a single plain filename | captured downloadCredentials response | `[ok]` | `tests/test_download.py::test_a_grant_must_be_https_and_a_plain_filename` |
 | `sk.download.save` | `client.fetch_module()` writes the bytes under the download directory and nowhere else | captured file fetch | `[ok]` | `tests/test_download.py::test_download_writes_beside_the_given_directory` |
 
+### Licensed files
+
+| Id | Obligation | Spec | Status | Evidence |
+|---|---|---|---|---|
+| `sk.downloads.access` | `catalog.parse_resource_access()` keeps the resource id and runnable flag and drops the account id | Techline Connect permissions search | `[ok]` | `tests/test_downloads.py::test_resource_access_drops_the_account_id` |
+| `sk.downloads.list` | `client.licensed_downloads()` asks for the Techline Connect installer and any other decimal resource the account can run | launcher resource 25 and permissions search | `[ok]` | `tests/test_downloads.py::test_the_installer_and_a_decimal_resource_are_listed` |
+| `sk.downloads.fetch` | `cli.run()` lists those files, and `--get` writes them under the download directory | same catalog | `[ok]` | `tests/test_downloads.py::test_downloads_lists_and_get_writes_the_file` |
+
 ### Not this slice
 
 | Id | Obligation | Spec | Status | Evidence |
