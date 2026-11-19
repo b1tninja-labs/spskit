@@ -255,11 +255,13 @@ def open_backend_session(settings: Settings, access_token: str, exchange: Exchan
     url = f"{settings.backend}/api/v1/login?zoneId={zone}"
     site = urllib.parse.urlsplit(settings.redirect_uri)
     origin = f"{site.scheme}://{site.netloc}"
+    apim = _apim_token(settings, exchange)
     status, raw = exchange(
         "POST",
         url,
         b"",
         {
+            "Authorization": f"Bearer {apim}",
             "X-EEID-Access-Token": access_token,
             "Accept": "application/json, text/plain, */*",
             "Origin": origin,
@@ -270,10 +272,54 @@ def open_backend_session(settings: Settings, access_token: str, exchange: Exchan
         raise SessionExpiredError(f"TDS login was refused ({status}; {_backend_error(raw)})")
 
 
+def _apim_token(settings: Settings, exchange: Exchange) -> str:
+    """The bearer API Management returns for the TDS site. It is not stored."""
+    status, raw = exchange(
+        "GET",
+        settings.apim_token_url,
+        None,
+        {"accept": "application/json, text/plain, */*"},
+    )
+    if status != 200:
+        raise SessionExpiredError(f"the API token was refused ({status})")
+    token = _parse_apim_token(raw)
+    if settings.password and settings.password in token:
+        raise SessionExpiredError("refusing to send the stored password to TDS")
+    return token
+
+
+def _parse_apim_token(raw: bytes) -> str:
+    text = raw.decode("utf-8").strip().strip('"')
+    if text.startswith("{"):
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise SessionExpiredError("the API token response has no token") from exc
+        if not isinstance(payload, dict):
+            raise SessionExpiredError("the API token response has no token")
+        found = next(
+            (
+                payload.get(key)
+                for key in ("access_token", "accessToken", "token", "bearerToken")
+                if isinstance(payload.get(key), str)
+            ),
+            None,
+        )
+        if not isinstance(found, str):
+            raise SessionExpiredError("the API token response has no token")
+        text = found.strip()
+    if text.count(".") != 2 or any(character.isspace() for character in text):
+        raise SessionExpiredError("the API token response has no token")
+    return text
+
+
 def _backend_error(raw: bytes) -> str:
     """A short error name from the backend. A token or a profile is not included."""
+    text = raw.decode("utf-8", "replace").strip()
+    if re.fullmatch(r"[A-Za-z0-9 _.:-]{1,120}", text) and text.count(".") < 2 and "eyJ" not in text:
+        return text
     try:
-        payload = json.loads(raw.decode("utf-8"))
+        payload = json.loads(text)
     except json.JSONDecodeError:
         return "not json"
     if not isinstance(payload, dict):

@@ -8,7 +8,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from spskit.signin import PUBLIC_CLIENT_ID, REDIRECT_URI, TENANT_ID
+from spskit.signin import APIM_URL, PUBLIC_CLIENT_ID, REDIRECT_URI, TENANT_ID
 
 _KEY = re.compile(r"[A-Z][A-Z0-9_]*")
 _ASSIGN = re.compile(r"^(?:export\s+)?([A-Z][A-Z0-9_]*)=(.*)$")
@@ -32,6 +32,7 @@ class Settings:
     tenant: str = TENANT_ID
     redirect_uri: str = REDIRECT_URI
     backend: str = "https://backend.acdelcotds.com"
+    apim_token_url: str = APIM_URL
     zone: str = "America/Los_Angeles"
     code_verifier: str = ""
     token_file: pathlib.Path | None = None
@@ -69,11 +70,13 @@ def settings_from(env: Mapping[str, str]) -> Settings:
     ciam = env.get("TDS_CIAM", "https://gmb2bciamprod.ciamlogin.com").rstrip("/")
     backend = env.get("TDS_BACKEND", "https://backend.acdelcotds.com").rstrip("/")
     redirect_uri = env.get("TDS_REDIRECT_URI", REDIRECT_URI).rstrip("/")
+    apim_token_url = env.get("TDS_APIM_TOKEN_URL", APIM_URL).strip()
     for name, value in (
         ("TDS_GATEWAY", gateway),
         ("TDS_CIAM", ciam),
         ("TDS_BACKEND", backend),
         ("TDS_REDIRECT_URI", redirect_uri),
+        ("TDS_APIM_TOKEN_URL", apim_token_url),
     ):
         if not value.startswith("https://") or " " in value:
             raise ConfigError(f"{name} must be an https URL")
@@ -98,6 +101,7 @@ def settings_from(env: Mapping[str, str]) -> Settings:
         tenant=env.get("TDS_TENANT", TENANT_ID).strip() or TENANT_ID,
         redirect_uri=redirect_uri,
         backend=backend,
+        apim_token_url=apim_token_url,
         zone=env.get("TDS_ZONE", "America/Los_Angeles").strip() or "America/Los_Angeles",
         code_verifier=env.get("TDS_CODE_VERIFIER", "").strip(),
         token_file=token_file,

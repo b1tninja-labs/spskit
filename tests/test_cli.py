@@ -82,12 +82,16 @@ def test_token_command_writes_the_token_and_does_not_print_it(tmp_path, capsys):
     )
 
     def exchange(method, url, body, headers):
+        if "token.gen.acdelcotds.com" in url:
+            assert method == "GET"
+            return 200, b"header.payload.signature"
         assert method == "POST"
         if url.endswith("/token"):
             assert b"stored-password" not in body
             return 200, json.dumps({"token_type": "Bearer", "access_token": "access-token-value-0001"}).encode()
         assert body == b""
         assert headers["Origin"] == "https://www.acdelcotds.com"
+        assert headers["Authorization"] == "Bearer header.payload.signature"
         assert headers["X-EEID-Access-Token"] == "access-token-value-0001"
         return 200, b"{}"
 
@@ -225,9 +229,13 @@ def test_a_saved_token_retries_the_backend_without_a_new_code(tmp_path, capsys):
     )
 
     def exchange(method, url, body, headers):
+        if "token.gen.acdelcotds.com" in url:
+            assert method == "GET"
+            return 200, b"header.payload.signature"
         assert method == "POST"
         assert "/api/v1/login" in url
         assert body == b""
+        assert headers["Authorization"] == "Bearer header.payload.signature"
         assert headers["X-EEID-Access-Token"] == "access-token-value-0001"
         return 200, b"{}"
 

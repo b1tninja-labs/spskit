@@ -22,6 +22,7 @@ from spskit.verify import VerificationError
 PUBLIC_CLIENT_ID = "f5ad86b7-efd9-4305-b9c0-2f880adf3195"
 TENANT_ID = "450fd55c-b136-4d90-9e9f-a59b07772fab"
 REDIRECT_URI = "https://www.acdelcotds.com"
+APIM_URL = "https://token.gen.acdelcotds.com/api/tds-backend"
 _VERIFIER = re.compile(r"[A-Za-z0-9._~-]{43,128}")
 
 

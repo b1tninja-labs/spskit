@@ -207,6 +207,8 @@ def test_a_rejected_code_is_asked_again_without_a_new_email(tmp_path, capsys):
 
     def exchange(method, url, body, headers):
         nonlocal begins, posts
+        if "token.gen.acdelcotds.com" in url:
+            return 200, b"header.payload.signature"
         if method == "GET":
             return 200, PAGE.encode()
         if url.endswith("/GetCredentialType"):
@@ -245,6 +247,7 @@ def test_a_rejected_code_is_asked_again_without_a_new_email(tmp_path, capsys):
             return 302, REDIRECT.encode()
         if url.endswith("/token"):
             return 200, json.dumps({"token_type": "Bearer", "access_token": TOKEN}).encode()
+        assert headers["Authorization"] == "Bearer header.payload.signature"
         assert headers["X-EEID-Access-Token"] == TOKEN
         return 200, b"{}"
 
@@ -454,6 +457,8 @@ def test_login_posts_the_password_then_waits_for_the_email_code(tmp_path, capsys
         order.append("PROMPT" if False else url)
         posted = body.decode() if body else ""
         assert "old-secret" not in posted
+        if "token.gen.acdelcotds.com" in url:
+            return 200, b"header.payload.signature"
         if method == "GET":
             return 200, PAGE.encode()
         if url.endswith("/GetCredentialType"):
@@ -516,6 +521,7 @@ def test_login_posts_the_password_then_waits_for_the_email_code(tmp_path, capsys
         assert url.startswith("https://backend.example/api/v1/login")
         assert body == b""
         assert headers["Origin"] == "https://www.acdelcotds.com"
+        assert headers["Authorization"] == "Bearer header.payload.signature"
         assert headers["X-EEID-Access-Token"] == TOKEN
         return 200, b"{}"
 
@@ -568,6 +574,8 @@ def test_a_saved_stay_signed_in_finishes_without_a_new_email(tmp_path, capsys):
     def exchange(method, url, body, headers):
         nonlocal kmsi_posts
         calls.append(url)
+        if "token.gen.acdelcotds.com" in url:
+            return 200, b"header.payload.signature"
         if method == "GET":
             return 200, PAGE.encode()
         if url.endswith("/GetCredentialType"):
@@ -598,6 +606,7 @@ def test_a_saved_stay_signed_in_finishes_without_a_new_email(tmp_path, capsys):
         if url.endswith("/token"):
             assert b"abcd1234" not in body
             return 200, json.dumps({"token_type": "Bearer", "access_token": TOKEN}).encode()
+        assert headers["Authorization"] == "Bearer header.payload.signature"
         assert headers["X-EEID-Access-Token"] == TOKEN
         return 200, b"{}"
 

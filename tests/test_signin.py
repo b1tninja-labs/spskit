@@ -134,6 +134,10 @@ def test_the_code_is_exchanged_and_the_profile_is_discarded(tmp_path):
 
     def exchange(method, url, body, headers):
         seen.append((url, body, dict(headers)))
+        if "token.gen.acdelcotds.com" in url:
+            assert method == "GET"
+            assert body is None
+            return 200, b"header.payload.signature"
         assert method == "POST"
         if url.endswith("/token"):
             posted = urllib.parse.parse_qs(body.decode())
@@ -143,6 +147,7 @@ def test_the_code_is_exchanged_and_the_profile_is_discarded(tmp_path):
             return 200, json.dumps(
                 {"token_type": "Bearer", "access_token": "access-token-value-0001", "refresh_token": "refresh-secret"}
             ).encode()
+        assert headers["Authorization"] == "Bearer header.payload.signature"
         assert headers["X-EEID-Access-Token"] == "access-token-value-0001"
         assert headers["Origin"] == "https://www.acdelcotds.com"
         assert headers["Referer"] == "https://www.acdelcotds.com/"
@@ -153,7 +158,7 @@ def test_the_code_is_exchanged_and_the_profile_is_discarded(tmp_path):
     access = exchange_authorization_code(settings, REDIRECT, exchange)
     open_backend_session(settings, access, exchange)
     assert access == "access-token-value-0001"
-    assert seen[1][1] == b""
+    assert seen[2][1] == b""
 
 
 def test_a_refused_token_names_the_error_and_hides_the_description(tmp_path):
@@ -196,9 +201,13 @@ def test_a_refused_backend_names_the_error_and_hides_a_token(tmp_path):
         code_verifier=VERIFIER,
     )
 
-    def exchange(_method, url, body, headers):
+    def exchange(method, url, body, headers):
+        if "token.gen.acdelcotds.com" in url:
+            assert method == "GET"
+            return 200, b"header.payload.signature"
         assert "/api/v1/login" in url
         assert body == b""
+        assert headers["Authorization"] == "Bearer header.payload.signature"
         assert headers["Origin"] == "https://www.acdelcotds.com"
         return 401, json.dumps({"message": "Unauthorized", "token": "header.payload.signature"}).encode()
 

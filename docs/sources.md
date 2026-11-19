@@ -56,10 +56,12 @@ The browser lands on `https://www.acdelcotds.com/#code=...`. The token call is
 for the redirect site, because this public client only redeems a code on a cross-origin call. The response has `token_type`,
 `access_token` and `refresh_token`. Only the access token is kept.
 
-`POST https://backend.acdelcotds.com/api/v1/login?zoneId=America/Los_Angeles` sends that token in
-`X-EEID-Access-Token`, with `Origin` and `Referer` for the TDS site and an empty body. The header is
-sent with that spelling. The profile in the response is discarded. The access token is written before
-this call, so a refused login can be retried without a new email code.
+`GET https://token.gen.acdelcotds.com/api/tds-backend` returns the API Management bearer. It is not
+stored. `POST https://backend.acdelcotds.com/api/v1/login?zoneId=America/Los_Angeles` sends that bearer
+in `Authorization` and the access token in `X-EEID-Access-Token`, with `Origin` and `Referer` for the
+TDS site and an empty body. The access-token header is sent with that spelling. The profile in the
+response is discarded. The access token is written before this call, so a refused login can be retried
+without a new email code.
 
 `spskit login` stops after BeginAuth and writes the challenge, the code verifier, and the sign-in
 cookies to the session file. `spskit code` reads that file and posts the typed code. Once the code is
