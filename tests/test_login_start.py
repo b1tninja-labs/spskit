@@ -72,6 +72,58 @@ def test_a_redirecting_page_is_loaded_again_with_sso_reload():
     assert seen[0] == first
 
 
+def test_a_password_redirect_is_posted_back_with_sso_reload(tmp_path):
+    settings = Settings(
+        "person@example.com",
+        "current-secret",
+        "https://gateway.example",
+        "https://ciam.example",
+        "",
+        tmp_path,
+    )
+    interrupt = """
+<html><title>Redirecting</title><script>$Config={"sFTName":"flowToken","stsErrorCode":"50168",
+"urlPost":"/tenant/login","oPostParams":{"flowToken":"flow-after-interrupt","ctx":"ctx-i",
+"canary":"canary-i","login":"person@example.com","passwd":"a&amp;b","type":"11"},
+"bsso":{"cookieNames":{"ssoPulled":"SSOCOOKIEPULLED"}}};</script></html>
+"""
+    seen: list[tuple[str, str]] = []
+
+    def exchange(method, url, body, headers):
+        seen.append((method, url))
+        if method == "GET":
+            return 200, PAGE.encode()
+        if url.endswith("/GetCredentialType"):
+            return 200, json.dumps({"IfExistsResult": 0, "FlowToken": "flow-2"}).encode()
+        if url.endswith("/login") and "sso_reload=true" not in url:
+            posted = parse_qs(body.decode())
+            assert posted["passwd"] == ["current-secret"]
+            return 200, interrupt.encode()
+        if url.endswith("/BeginAuth"):
+            return 200, json.dumps(
+                {
+                    "Success": True,
+                    "ErrCode": 0,
+                    "ResultValue": "Success",
+                    "FlowToken": "flow-after-begin",
+                    "Ctx": "ctx-after-begin",
+                    "CorrelationId": "corr-begin",
+                }
+            ).encode()
+        assert "sso_reload=true" in url
+        assert "/login?" in url
+        assert headers["cookie"] == "SSOCOOKIEPULLED=1"
+        posted = parse_qs(body.decode())
+        assert posted["passwd"] == ["a&b"]
+        assert posted["flowToken"] == ["flow-after-interrupt"]
+        assert "current-secret" not in body.decode()
+        return 200, MFA.encode()
+
+    requested = request_email_code(settings, exchange)
+    assert requested.challenge.code_length == 8
+    assert any("sso_reload=true" in url for _method, url in seen)
+
+
 def test_a_page_without_a_flow_token_is_skipped():
     assert parse_page_config("<html>$Config={};</html>") is None
     assert _page(PAGE)["sFT"] == "flow-token-value-0001"

@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import html
 import json
+import re
 import secrets
 import urllib.parse
 from collections.abc import Callable, Mapping
@@ -27,6 +29,7 @@ _CONFIG = "$Config="
 _BEGIN = "/common/SAS/BeginAuth"
 _PROCESS = "/common/SAS/ProcessAuth"
 _KMSI = "/kmsi"
+_COOKIE_NAME = re.compile(r"^[A-Za-z0-9_]{1,40}$")
 _UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 
@@ -243,9 +246,10 @@ def request_email_code(settings: Settings, exchange: Exchange) -> EmailRequest:
         headers["canary"] = refreshed
     flow = credential.get("FlowToken")
     flow_token = flow if isinstance(flow, str) and flow else _text(config, "sFT")
+    login_url = f"{settings.ciam}/{settings.tenant}/login"
     status, raw = _form_call(
         exchange,
-        f"{settings.ciam}/{settings.tenant}/login",
+        login_url,
         login_form(config, settings.username, password, flow_token),
         page_url,
     )
@@ -253,6 +257,11 @@ def request_email_code(settings: Settings, exchange: Exchange) -> EmailRequest:
     if status != 200:
         raise LoginError(f"the sign-in host refused the password ({status})")
     signed_in = parse_page_config(raw.decode("utf-8", errors="replace"))
+    if signed_in is None:
+        status, raw = _post_redirect(settings, exchange, raw.decode("utf-8", errors="replace"), login_url)
+        if status != 200:
+            raise LoginError(f"the sign-in host refused the password ({status})")
+        signed_in = parse_page_config(raw.decode("utf-8", errors="replace"))
     if signed_in is None:
         raise LoginError("the sign-in page did not include a flow token")
     if _error_code(signed_in) == "50126":
@@ -395,23 +404,74 @@ def _redirect_url(status: int, raw: bytes) -> str:
     return location
 
 
+def _page_object(html_text: str) -> dict[str, object] | None:
+    """The first `$Config` object, including the redirect page that has no `sFT`."""
+    start = 0
+    while True:
+        marker = html_text.find(_CONFIG, start)
+        if marker < 0:
+            return None
+        brace = html_text.find("{", marker)
+        if brace < 0:
+            return None
+        try:
+            obj, _end = json.JSONDecoder().raw_decode(html_text[brace:])
+        except json.JSONDecodeError:
+            start = marker + len(_CONFIG)
+            continue
+        if isinstance(obj, dict):
+            return obj
+        start = brace + 1
+
+
+def _post_redirect(settings: Settings, exchange: Exchange, html_text: str, referer: str) -> tuple[int, bytes]:
+    """Post the redirect page's own form back, with `sso_reload=true`.
+
+    That page is the browser-SSO interrupt. Its script posts `oPostParams` to `urlPost`
+    after setting the `ssoPulled` cookie, and the next response is the sign-in form.
+    """
+    obj = _page_object(html_text)
+    params = obj.get("oPostParams") if isinstance(obj, dict) else None
+    posted = _text(obj, "urlPost") if isinstance(obj, dict) else ""
+    if not isinstance(obj, dict) or not isinstance(params, dict) or not posted:
+        raise LoginError("the sign-in page did not include a flow token")
+    target = _ciam_url(settings, posted)
+    if "sso_reload=" not in target:
+        target += "&sso_reload=true" if urllib.parse.urlsplit(target).query else "?sso_reload=true"
+    fields: list[tuple[str, str]] = []
+    for key, value in params.items():
+        if isinstance(key, str) and isinstance(value, str):
+            fields.append((html.unescape(key), html.unescape(value)))
+    if not fields:
+        raise LoginError("the sign-in page did not include a flow token")
+    return _form_call(exchange, target, fields, referer, {"cookie": f"{_sso_cookie(obj)}=1"})
+
+
+def _sso_cookie(config: Mapping[str, object]) -> str:
+    bsso = config.get("bsso")
+    names = bsso.get("cookieNames") if isinstance(bsso, Mapping) else None
+    pulled = names.get("ssoPulled") if isinstance(names, Mapping) else None
+    if isinstance(pulled, str) and _COOKIE_NAME.fullmatch(pulled):
+        return pulled
+    return "SSOCOOKIEPULLED"
+
+
 def _form_call(
     exchange: Exchange,
     url: str,
     fields: list[tuple[str, str]],
     referer: str,
+    extra: Mapping[str, str] | None = None,
 ) -> tuple[int, bytes]:
-    return exchange(
-        "POST",
-        url,
-        urllib.parse.urlencode(fields).encode("utf-8"),
-        {
-            "accept": "text/html",
-            "content-type": "application/x-www-form-urlencoded",
-            "referer": referer,
-            "user-agent": _UA,
-        },
-    )
+    headers = {
+        "accept": "text/html",
+        "content-type": "application/x-www-form-urlencoded",
+        "referer": referer,
+        "user-agent": _UA,
+    }
+    if extra:
+        headers.update(extra)
+    return exchange("POST", url, urllib.parse.urlencode(fields).encode("utf-8"), headers)
 
 
 def _json_call(

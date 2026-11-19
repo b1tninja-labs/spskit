@@ -6,7 +6,9 @@ import argparse
 import http.cookiejar
 import json
 import pathlib
+import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -61,17 +63,53 @@ class _CodeRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+_JAR = http.cookiejar.CookieJar()
 _OPENER = urllib.request.build_opener(
-    urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
+    urllib.request.HTTPCookieProcessor(_JAR),
     _CodeRedirect(),
 )
+_COOKIE_NAME = re.compile(r"^[A-Za-z0-9_]{1,40}$")
+
+
+def _store_cookie(url: str, header: str) -> None:
+    """Keep one extra cookie on the jar. The jar still sends the cookies the host set."""
+    name, separator, value = header.strip().partition("=")
+    if separator != "=" or _COOKIE_NAME.fullmatch(name) is None or not value or any(c in value for c in "\r\n;"):
+        return
+    parts = urllib.parse.urlsplit(url)
+    if not parts.hostname:
+        return
+    _JAR.set_cookie(
+        http.cookiejar.Cookie(
+            0,
+            name,
+            value,
+            None,
+            False,
+            parts.hostname,
+            True,
+            False,
+            "/",
+            True,
+            True,
+            int(time.time()) + 60,
+            False,
+            None,
+            None,
+            {},
+        )
+    )
 
 
 def urllib_exchange(method: str, url: str, body: bytes | None, headers: Mapping[str, str]) -> tuple[int, bytes]:
     parts = urllib.parse.urlsplit(url)
     if parts.scheme != "https":
         raise SessionExpiredError("refusing a URL that is not https")
-    request = urllib.request.Request(url, data=body, headers=dict(headers), method=method)  # noqa: S310
+    outgoing = dict(headers)
+    extra_cookie = outgoing.pop("cookie", None)
+    if extra_cookie:
+        _store_cookie(url, extra_cookie)
+    request = urllib.request.Request(url, data=body, headers=outgoing, method=method)  # noqa: S310
     try:
         with _OPENER.open(request, timeout=60) as response:
             return response.status, response.read()

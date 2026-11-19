@@ -15,8 +15,11 @@ The next GET is that same URL with `sso_reload=true`, and that page carries `sFT
 `i21=0`, `CookieDisclosure=0`, `IsFidoSupported=1`, `isSignupPost=0`, `i13=0`, `login`, `loginfmt`,
 `type=11`, `LoginOptions=3`, and the empty `psRNGC*`, `PPSX`, `FoundMSAs`, `lrt`, `lrtPartition`,
 `hisRegion` and `hisScaleUnit` fields. `passwd` is `TDS_NEW_PASSWORD` when that is set, and
-`TDS_PASSWORD` otherwise. `sErrorCode` `50126` is a rejected password. `sErrorCode` `50074` (page
-`FabricTFA`) is the email step.
+`TDS_PASSWORD` otherwise. `sErrorCode` `50126` is a rejected password. The password POST can instead return the Redirecting
+page (`stsErrorCode` `50168`) whose `oPostParams` are the same form and whose `urlPost` is
+`/{tenant}/login`. The browser posts that form to `urlPost` with `sso_reload=true` and the cookie
+named by `bsso.cookieNames.ssoPulled` (`SSOCOOKIEPULLED`). That response is page `FabricTFA`
+(`stsErrorCode` `50074`), the email step.
 
 `POST /common/SAS/BeginAuth` sends `AuthMethodId` `Email`, `Method` `BeginAuth`, `ctx` and `flowToken`.
 A success is `Success` true, `ErrCode` 0 and `ResultValue` `Success`, with a new `FlowToken` and `Ctx`.
