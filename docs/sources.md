@@ -128,6 +128,34 @@ The same page downloads the installer with `POST /cdn/files/public/downloadCrede
 `TLC Installer` `26.8.31.0` `INITIAL_SOFTWARE`. The file is
 `https://tlc-cdn.gm.com/cache-downloads/public/Prod/TLC_Installer/26_8_31_0/TLCSuite.exe`.
 
+`TLCSuite.exe` installs three pieces: a bundled JDK, `TLCLauncher.exe`, and `TUM.exe`. jadx 1.5.6
+on the classes inside those two programs shows the handoff. The decompiled tree is not part of this
+repository.
+
+`TLCLauncher.exe` is `com.gm.cca.tlc.launcher.Main` from `tlc-launcher-client` 26.4.23.0. `main`
+strips the `tlc:,` prefix, splits on commas, and requires one field per `StartupArg` value. A
+fourteenth field may be `installTum` or `revertTum`. When `TLC_LOGIN_AS_ADMIN` is `Y`, it sets that
+field to `Y-restarted` and starts `TLCLauncherAdmin.exe` with the `tlc:,` string rebuilt. Otherwise
+it starts `cmd /C C:/Program Files/TechlineConnect/TUM/TUM.exe` and passes the thirteen field values
+as separate arguments. The working directory is `C:/Program Files/TechlineConnect`. Installing TUM
+runs `msiexec /i tumApp.msi /qb` from the temp installer directory.
+
+`TUM.exe` is a Launch4j wrapper. It runs `..\jdk\bin\javaw.exe` with `-Djava.library.path=../jdk`
+and main class `org.springframework.boot.loader.JarLauncher`. The manifest `Start-Class` is
+`com.gm.tlc.tum.TumSpringApplication`, implementation version 26.8.28.0, built for Java 11, Spring
+Boot 2.5.12. That class reads its own arguments, installs a bundled trust store, and opens the
+JavaFX application `TumJavafxApplication`.
+
+TUM's `StartupArg` has fifteen values, not the launcher's thirteen. After the shared login fields
+it expects `ACCESS_TOKEN`, `REFRESH_TOKEN`, `GATEWAY_URI`, `VIN`, and `CLIENT_TYPE`
+(`TLC_CLIENT`, `SDV_CLIENT`, `DPS_CLIENT`, or unknown). `AppLauncherService` picks a strategy from
+`CLIENT_TYPE`. `TLC_CLIENT` asks the authentication service for a TLC token and then starts
+`cmd /C` plus `TechlineConnectLaunch.exe` under the Techline Connect program directory, passing
+TUM's argument list. `SDV_CLIENT` starts `SdvClient.exe` with the environment, the user id taken
+from the session id, the access token, the refresh token, and the VIN. `DPS_CLIENT` has an empty
+`launch` method in this build. `TechlineConnectLaunch.exe` is not inside `TLCSuite.exe`. It is a
+later download, so it is the next program to open with jadx.
+
 ## SPS Info catalog
 
 `spskit sps --vin` is one VIN the subscription can open. It is not a dump of every VIN.
