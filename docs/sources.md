@@ -5,18 +5,35 @@ Shapes below are field names from the person's own captures of ACDelco TDS and T
 
 ## Sign-in
 
-The sign-in host is `gmb2bciamprod.ciamlogin.com`. When it wants an email code it returns JSON with
-`state` `verificationRequired`, `codeLength`, `continuationToken`, and `_links.verify.href` as a path
-on that host. The verify call posts `continuationToken` and `otp`. A continued sign-in returns
-`state` `continue`.
+The sign-in host is `gmb2bciamprod.ciamlogin.com`. `spskit login` follows the password form, then the
+email code. It does not call password recovery.
 
-The password call that follows verification is a reset. Verification that continues names `_links.next`
+`GET /{tenant}/oauth2/v2.0/authorize` returns the page whose `$Config` carries `sFT` and `sCtx`. A first
+response without `sFT` is loaded again. `POST /common/GetCredentialType` sends `username`, `flowToken`
+(`sFT`) and `originalRequest` (`sCtx`). `POST /{tenant}/login` is the form the browser posted: `passwd`,
+`ps=2`, `isReactBundle=1`, `canary`, `ctx`, `hpgrequestid`, `flowToken`, `NewUser=1`, `fspost=0`,
+`i21=0`, `CookieDisclosure=0`, `IsFidoSupported=1`, `isSignupPost=0`, `i13=0`, `login`, `loginfmt`,
+`type=11`, `LoginOptions=3`, and the empty `psRNGC*`, `PPSX`, `FoundMSAs`, `lrt`, `lrtPartition`,
+`hisRegion` and `hisScaleUnit` fields. `passwd` is `TDS_NEW_PASSWORD` when that is set, and
+`TDS_PASSWORD` otherwise. `sErrorCode` `50126` is a rejected password. `sErrorCode` `50074` (page
+`FabricTFA`) is the email step.
+
+`POST /common/SAS/BeginAuth` sends `AuthMethodId` `Email`, `Method` `BeginAuth`, `ctx` and `flowToken`.
+A success is `Success` true, `ErrCode` 0 and `ResultValue` `Success`, with a new `FlowToken` and `Ctx`.
+The code length on that page is `iEmailOtcLength` (8). The command then waits for the person to type it.
+
+`POST /common/SAS/ProcessAuth` sends `otc`, `canary`, `flowToken`, `request`, `login`, `hpgrequestid`
+and `mfaAuthMethod` `Email`. The next page is `KmsiInterrupt` (`sErrorCode` `50140`, `urlPost` `/kmsi`).
+`POST /kmsi` sends `LoginOptions=1`, `type=28`, `ctx`, `hpgrequestid`, `flowToken`, `canary` and `i19`.
+The response is a 302 whose `Location` is `https://www.acdelcotds.com/#code=...`.
+
+A separate captured path, not used by `spskit login`, is password recovery. That JSON challenge has
+`state` `verificationRequired`, `codeLength`, `continuationToken` and `_links.verify.href`. The verify
+call posts `continuationToken` and `otp`. When that path continues into a reset, `_links.next` is
 `recover`. `recover` posts `continuationToken` and returns `state` `methodUpdateRequired` with an
-`update` link. The update is a PUT of `continuationToken` and `newPassword`. `newPassword` is
-`TDS_NEW_PASSWORD` when that is set, and `TDS_PASSWORD` (the current password) otherwise. A 504 is
-retried once. `methodUpdatePending` is polled with `continuationToken` only, up to five times, until
-`state` is `continue`. The login form's current password is the field `passwd`; it is not a second
-field on this PUT.
+`update` link. The update is a PUT of `continuationToken` and `newPassword`. A 504 is retried once.
+`methodUpdatePending` is polled with `continuationToken` only, up to five times, until `state` is
+`continue`. `passwd` is not a field on that PUT.
 
 ## Access token
 
@@ -28,8 +45,9 @@ The browser lands on `https://www.acdelcotds.com/#code=...`. The token call is
 `POST https://backend.acdelcotds.com/api/v1/login?zoneId=America/Los_Angeles` sends that token in
 `X-EEID-Access-Token` and an empty body. The profile in the response is discarded.
 
-The access token that arrives by email is pasted at `spskit session` and kept in the session file.
-The eight-character verification code is a different prompt and is not written to that file.
+`spskit login` keeps the access token from that exchange in the session file. `spskit session` can
+also store an access token the person already holds. The eight-character email code is a different
+prompt and is not written to that file.
 
 ## Gateway
 

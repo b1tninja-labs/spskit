@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import pathlib
+import subprocess
+import sys
 
 from spskit.cli import run
 from spskit.verify import parse_challenge
@@ -95,7 +98,7 @@ def test_session_prompts_for_the_emailed_token_and_later_commands_send_it(tmp_pa
     emailed = "access-token-from-email"
 
     def reader(prompt: str) -> str:
-        assert "email" in prompt
+        assert "access token" in prompt
         return emailed
 
     code = run(["--env", str(env), "session"], lambda *_args: (0, b""), reader)
@@ -126,3 +129,15 @@ def test_session_prompts_for_the_emailed_token_and_later_commands_send_it(tmp_pa
     code = run(["--env", str(env), "modules", "--id", "25"], exchange, lambda _prompt: "not-asked")
     assert code == 0
     assert emailed not in capsys.readouterr().out
+
+
+def test_python_m_spskit_reaches_the_cli():
+    completed = subprocess.run(
+        [sys.executable, "-m", "spskit", "--help"],
+        cwd=pathlib.Path(__file__).resolve().parents[1],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0
+    assert "session" in completed.stdout

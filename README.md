@@ -3,13 +3,13 @@
 Download the service-programming modules an ACDelco TDS subscription is licensed for, without the Java
 Techline Connect client.
 
-Copy `.env.example` to `.env` and fill in the username and password on this machine. When the access
-token arrives by email, run `spskit session` and paste it. The session file is `session.json` in
-`SPS_DOWNLOAD_DIR`, or `TDS_TOKEN_FILE` when that path is set. Later commands read it and do not print it.
-When the sign-in host asks for a verification code, run `spskit verify` and type the code. That code is not
-saved. `spskit token --redirect` exchanges the `https://www.acdelcotds.com/#code=...` URL from that login.
-Set `TDS_CODE_VERIFIER` to the verifier for that login. If that login then asks for a password reset, the PUT
-sends `TDS_NEW_PASSWORD`, or `TDS_PASSWORD` when the new one is empty.
+Copy `.env.example` to `.env` and fill in the username and password on this machine. `spskit login`
+posts that password, asks the sign-in host to email a code, and waits for you to type it. The code is
+not saved. The access token is written to `session.json` in `SPS_DOWNLOAD_DIR`, or to `TDS_TOKEN_FILE`
+when that path is set. Later commands read it and do not print it. The sign-in password is
+`TDS_NEW_PASSWORD` when that is set, and `TDS_PASSWORD` otherwise. `spskit session` stores an access
+token you already hold. `spskit token --redirect` exchanges a `https://www.acdelcotds.com/#code=...`
+URL from a login you started yourself; set `TDS_CODE_VERIFIER` to that login's verifier.
 
 ```
 python -m spskit modules --id 25

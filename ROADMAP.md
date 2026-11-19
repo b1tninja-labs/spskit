@@ -30,6 +30,7 @@ so this package does not speak to a vehicle.
 | `sk.verify.submit` | `client.submit_code()` posts the code once and does not store it on settings | captured verify request | `[ok]` | `tests/test_verify.py::test_the_code_is_posted_once_and_not_kept_on_settings` |
 | `sk.cli.verify` | `cli.run()` prompts and reports continue | captured verify response | `[ok]` | `tests/test_cli.py::test_verify_prompts_and_reports_continue` |
 | `sk.cli.expired` | `cli.run()` reports an expired session and does not invent a code to send | gateway 401 | `[ok]` | `tests/test_cli.py::test_an_expired_session_is_reported_without_prompting` |
+| `sk.login.email` | `login_start.request_email_code()` posts the password and BeginAuth, then `cli.run()` waits for the email code | captured sign-in | `[ok]` | `tests/test_login_start.py::test_login_posts_the_password_then_waits_for_the_email_code` |
 
 ### Licensed modules
 
@@ -51,8 +52,8 @@ so this package does not speak to a vehicle.
 | `sk.sign-in.token` | `signin.parse_access_token()` keeps the access token and drops the refresh token | captured token response | `[ok]` | `tests/test_signin.py::test_the_access_token_is_kept_and_the_refresh_token_is_dropped` |
 | `sk.sign-in.session` | `client.open_backend_session()` posts an empty body and the access-token header | captured TDS login | `[ok]` | `tests/test_signin.py::test_the_code_is_exchanged_and_the_profile_is_discarded` |
 | `sk.cli.token` | `cli.run()` writes the access token to the token file and does not print it | captured token response | `[ok]` | `tests/test_cli.py::test_token_command_writes_the_token_and_does_not_print_it` |
-| `sk.session.prompt` | `session.prompt_emailed_token()` asks for the access token from the email and refuses the short verification code | emailed access token | `[ok]` | `tests/test_session.py::test_the_email_prompt_keeps_an_access_token_and_refuses_the_short_code` |
+| `sk.session.prompt` | `session.prompt_emailed_token()` asks for an access token the person already holds and refuses a short verification code | pasted access token | `[ok]` | `tests/test_session.py::test_the_email_prompt_keeps_an_access_token_and_refuses_the_short_code` |
 | `sk.session.file` | `session.write_session()` stores that token outside the repository and `session.apply_saved_session()` reloads it | local session file | `[ok]` | `tests/test_session.py::test_the_session_file_is_reloaded_and_a_path_in_the_repository_is_refused` |
-| `sk.cli.session` | `cli.run()` prompts, writes the session file, and a later command sends that token | emailed access token | `[ok]` | `tests/test_cli.py::test_session_prompts_for_the_emailed_token_and_later_commands_send_it` |
+| `sk.cli.session` | `cli.run()` prompts, writes the session file, and a later command sends that token | pasted access token | `[ok]` | `tests/test_cli.py::test_session_prompts_for_the_emailed_token_and_later_commands_send_it` |
 | `sk.no.vehicle` | do not program a controller, calculate a seed or key, or speak SAE J2534 until that document is imported into primarysource | ISO 14229-1:2013 clause 15.4.4 | `[no]` | the package has no pass-through and no programming service |
 | `sk.no.security-access` | security access and transfer of a calibration stay out of this package | owner decision | `[no]` | same boundary as the volt research notes |

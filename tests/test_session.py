@@ -18,7 +18,7 @@ def test_the_email_prompt_keeps_an_access_token_and_refuses_the_short_code(tmp_p
         return "access-token-from-email"
 
     assert prompt_emailed_token(reader) == "access-token-from-email"
-    assert "email" in seen[0]
+    assert "access token" in seen[0]
     with pytest.raises(TokenError, match="verification code"):
         prompt_emailed_token(lambda _prompt: "abcd1234")
     assert not (tmp_path / "session.json").exists()
