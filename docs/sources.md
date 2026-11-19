@@ -86,6 +86,34 @@ The captured calls did not send an `Authorization` header. `TDS_ACCESS_TOKEN`, w
 a bearer because a later licensed call may require the session the child-token call returns. An empty
 token sends no authorization header.
 
+## Techline Connect launch
+
+The TDS page does not start `TLCSuite.exe`. An access click calls
+`GET /api/v1/subscriptions/vin/access/{slot}` or `GET /api/v1/subscriptions/access/{id}`. The SPS
+calibration link calls `GET /api/v1/spsCallibration/accessSPSCal`. Each returns HTML titled
+`SPOREF Redirection`. The page writes that document into a new window, and the body submits
+`redirectForm`.
+
+The form is `POST https://tlc-dmz-gateway.ext.gm.com/authorization/oauth/user/sporef/ui`. The captured
+VIN form sends `appParm` `techpd`, `portal_ID` `ACDelco` and `group` `OMUSER,na_SPS2`, plus `ticket`,
+`idpaccesstoken`, `acdsub`, `user`, `origin` and `sporefGPLDIP`. `tdsToken` was empty. The calibration
+link sends `appParm` `sps2info` and `group` `ACDELCO`, and that post returns the SPS Info page
+(`/spsinfo-ui/`), which is a web page.
+
+The installed client is started from `https://tlc-dmz-gateway.ext.gm.com/tlc-web/`, whose page calls
+itself the Techline Connect launcher. Its launch button sets `document.location` to a `tlc:` URL.
+`TLCLauncher.exe` strips the `tlc:,` prefix and reads thirteen comma-separated fields:
+`TLC_BROWSE_LAUNCH`, `TLC_ENVIRONMENT`, `TLC_LOGIN_SESSION_ID`, `TLC_LOGIN_SECURITY_ID`,
+`TLC_LOGIN_JSESSION_ID`, `TLC_LOGIN_SI_AUTH`, `TLC_LOGIN_AS_ADMIN`, `TLC_TDS_REST_TOKEN`,
+`TLC_ACCESS_TOKEN`, `TLC_REFRESH_TOKEN`, `IBM_GATEWAY_URI`, `IBM_CLIENT_ID`, `IBM_CLIENT_SECRET`.
+The button sends `Y`, the environment name `prod`, `Y` or `N` for the admin checkbox, and the access
+and refresh tokens from `GET /oauth/user/token/child?tokenType=tum2`. The other fields are the literal
+`NA`. Those tokens are not written here.
+
+The same page downloads the installer with `POST /cdn/files/public/downloadCredentials` for
+`TLC Installer` `26.8.31.0` `INITIAL_SOFTWARE`. The file is
+`https://tlc-cdn.gm.com/cache-downloads/public/Prod/TLC_Installer/26_8_31_0/TLCSuite.exe`.
+
 ## Vehicle programming
 
 ISO 14229-1:2013 clause 15.4.4 (cited through `primarysource`) names SAE J2534 as the communication
