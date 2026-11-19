@@ -227,8 +227,7 @@ def request_email_code(settings: Settings, exchange: Exchange) -> EmailRequest:
         raise LoginError("TDS_USERNAME is empty")
     password = sign_in_password(settings)
     verifier = code_verifier()
-    page_url = authorize_url(settings, verifier)
-    config = _load_config(settings, exchange, page_url)
+    config, page_url = _load_config(settings, exchange, authorize_url(settings, verifier))
     headers = page_headers(config, page_url)
     credential = _json_call(
         exchange,
@@ -311,22 +310,38 @@ def submit_email_code(settings: Settings, requested: EmailRequest, code: str, ex
     return _redirect_url(status, raw)
 
 
-def _load_config(settings: Settings, exchange: Exchange, page_url: str) -> dict[str, object]:
+def _sso_reload(url: str) -> str:
+    """The authorize URL the redirect page loads next. `sso_reload=true` is the only addition."""
+    parts = urllib.parse.urlsplit(url)
+    query = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+    if not any(key == "sso_reload" for key, _value in query):
+        query.append(("sso_reload", "true"))
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, urllib.parse.urlencode(query), ""))
+
+
+def _load_config(settings: Settings, exchange: Exchange, page_url: str) -> tuple[dict[str, object], str]:
+    """Return the page config and the URL that carried it.
+
+    The first authorize response is a Redirecting page with no `sFT`. The browser then
+    requests the same URL with `sso_reload=true`, and that response is the sign-in form.
+    """
     html_headers = {"accept": "text/html", "user-agent": _UA}
     status, raw = exchange("GET", page_url, None, html_headers)
     if status != 200:
         raise LoginError(f"the sign-in page was refused ({status})")
     config = parse_page_config(raw.decode("utf-8", errors="replace"))
+    loaded = page_url
     if config is None:
-        status, raw = exchange("GET", page_url, None, html_headers)
+        loaded = _sso_reload(page_url)
+        status, raw = exchange("GET", loaded, None, {**html_headers, "referer": page_url})
         if status != 200:
             raise LoginError(f"the sign-in page was refused ({status})")
         config = parse_page_config(raw.decode("utf-8", errors="replace"))
     if config is None:
         raise LoginError("the sign-in page did not include a flow token")
-    if urllib.parse.urlsplit(page_url).hostname != urllib.parse.urlsplit(settings.ciam).hostname:
+    if urllib.parse.urlsplit(loaded).hostname != urllib.parse.urlsplit(settings.ciam).hostname:
         raise LoginError("the sign-in page is not on the sign-in host")
-    return config
+    return config, loaded
 
 
 def _challenge(settings: Settings, page: Mapping[str, object], started: Mapping[str, object]) -> MfaChallenge:

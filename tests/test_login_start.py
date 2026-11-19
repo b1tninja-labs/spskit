@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from urllib.parse import parse_qs
 
 import pytest
 
 from spskit.cli import run
 from spskit.config import Settings
-from spskit.login_start import LoginError, parse_page_config, redirect_location, request_email_code, submit_email_code
+from spskit.login_start import (
+    LoginError,
+    _load_config,
+    parse_page_config,
+    redirect_location,
+    request_email_code,
+    submit_email_code,
+)
 
 PAGE = """
 <html><script>$Config={"sFT":"flow-token-value-0001","sCtx":"original-request-value",
@@ -35,6 +43,33 @@ def _page(html: str) -> dict[str, object]:
     config = parse_page_config(html)
     assert config is not None
     return config
+
+
+def test_a_redirecting_page_is_loaded_again_with_sso_reload():
+    settings = Settings(
+        "person@example.com",
+        "current-secret",
+        "https://gateway.example",
+        "https://ciam.example",
+        "",
+        Path("D:/data/spskit"),
+    )
+    first = "https://ciam.example/tenant/oauth2/v2.0/authorize?client_id=abc"
+    seen: list[str] = []
+
+    def exchange(method, url, _body, headers):
+        assert method == "GET"
+        seen.append(url)
+        if "sso_reload=true" not in url:
+            return 200, b'<html><title>Redirecting</title><script>$Config={"sFTName":"flowToken"};</script></html>'
+        assert headers["referer"] == first
+        return 200, PAGE.encode()
+
+    config, loaded = _load_config(settings, exchange, first)
+    assert config["sFT"] == "flow-token-value-0001"
+    assert loaded.startswith(first)
+    assert "sso_reload=true" in loaded
+    assert seen[0] == first
 
 
 def test_a_page_without_a_flow_token_is_skipped():

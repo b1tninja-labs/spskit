@@ -8,8 +8,8 @@ Shapes below are field names from the person's own captures of ACDelco TDS and T
 The sign-in host is `gmb2bciamprod.ciamlogin.com`. `spskit login` follows the password form, then the
 email code. It does not call password recovery.
 
-`GET /{tenant}/oauth2/v2.0/authorize` returns the page whose `$Config` carries `sFT` and `sCtx`. A first
-response without `sFT` is loaded again. `POST /common/GetCredentialType` sends `username`, `flowToken`
+`GET /{tenant}/oauth2/v2.0/authorize` returns a page titled Redirecting whose `$Config` has no `sFT`.
+The next GET is that same URL with `sso_reload=true`, and that page carries `sFT` and `sCtx`. `POST /common/GetCredentialType` sends `username`, `flowToken`
 (`sFT`) and `originalRequest` (`sCtx`). `POST /{tenant}/login` is the form the browser posted: `passwd`,
 `ps=2`, `isReactBundle=1`, `canary`, `ctx`, `hpgrequestid`, `flowToken`, `NewUser=1`, `fspost=0`,
 `i21=0`, `CookieDisclosure=0`, `IsFidoSupported=1`, `isSignupPost=0`, `i13=0`, `login`, `loginfmt`,
