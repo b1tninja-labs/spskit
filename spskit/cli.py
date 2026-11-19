@@ -31,7 +31,10 @@ from spskit.client import (
     list_modules,
     open_backend_session,
     request_grant,
+    request_sps_form,
     submit_code,
+    submit_sporef_form,
+    sync_sps_vin,
 )
 from spskit.config import ConfigError, load_settings
 from spskit.login_start import (
@@ -62,6 +65,7 @@ from spskit.session import (
     write_signin,
     write_stay,
 )
+from spskit.spsinfo import SpsInfoError, check_vin
 from spskit.verify import SessionExpiredError, parse_challenge
 
 
@@ -216,6 +220,20 @@ def urllib_exchange(
             sleeper(delay)
 
 
+def sps_info_bearer() -> str:
+    """The SPS Info cookie is the bearer. The page removes that cookie; the value is not printed."""
+    found: str | None = None
+    for cookie in list(_JAR):
+        if cookie.name != "SPS-INFO_ACCESS_TOKEN":
+            continue
+        if cookie.value and found is None:
+            found = cookie.value
+        _JAR.clear(cookie.domain, cookie.path, cookie.name)
+    if not found:
+        raise SpsInfoError("SPS Info did not return a session")
+    return found
+
+
 def _transient(exc: urllib.error.URLError) -> bool:
     reason = exc.reason
     if isinstance(reason, ssl.SSLCertVerificationError):
@@ -345,6 +363,8 @@ def run(
     sub.add_parser("session", help="save an access token the person already holds")
     token = sub.add_parser("token", help="exchange the TDS redirect for an access token")
     token.add_argument("--redirect", required=True, help="the https://www.acdelcotds.com/#code=... URL")
+    sps = sub.add_parser("sps", help="save the SPS Info catalog for one VIN")
+    sps.add_argument("--vin", required=True, help="17-character VIN")
     args = parser.parse_args(list(argv))
     try:
         settings = load_settings(pathlib.Path(args.env))
@@ -431,6 +451,20 @@ def run(
             result = submit_code(settings, challenge, reader, exchange)
             print(f"verification state: {result.get('state')}")
             return 0
+        if args.command == "sps":
+            check_vin(args.vin)
+            if not settings.access_token:
+                raise SessionExpiredError("there is no saved session")
+            form = request_sps_form(settings, exchange)
+            submit_sporef_form(settings, form, exchange)
+            catalog = sync_sps_vin(settings, args.vin, sps_info_bearer(), exchange)
+            print(
+                f"{catalog.controllers} controllers, {catalog.functions} functions, "
+                f"{catalog.methods} methods, {catalog.supported_controllers} supported, "
+                f"{catalog.calibrations} calibrations, {catalog.module_slots} modules, {catalog.rpos} rpo"
+            )
+            print(catalog.path)
+            return 0
         if args.command == "downloads":
             found = licensed_downloads(settings, exchange)
             if args.fetch:
@@ -452,7 +486,7 @@ def run(
             fetch_module(settings, grant, exchange)
             print(f"wrote {settings.download_dir / grant.filename}")
         return 0
-    except (ConfigError, SessionExpiredError, ValueError) as exc:
+    except (ConfigError, SessionExpiredError, SpsInfoError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
         first_line = str(exc).splitlines()[0]
         if args.command == "code" and first_line not in {

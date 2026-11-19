@@ -32,6 +32,15 @@ from spskit.signin import (
     password_update_body,
     token_form,
 )
+from spskit.spsinfo import (
+    SporefForm,
+    SpsInfoError,
+    VinCatalog,
+    check_vin,
+    parse_sporef_form,
+    save_vin,
+    sequence_request,
+)
 from spskit.verify import SessionExpiredError, VerificationChallenge, challenge_from_body, otp_message, prompt_code
 
 
@@ -355,3 +364,91 @@ def _backend_error(raw: bytes) -> str:
         if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9 _.:-]{1,80}", value) and value.count(".") < 2:
             return value
     return "no error code"
+
+
+def _site_origin(settings: Settings) -> str:
+    site = urllib.parse.urlsplit(settings.redirect_uri)
+    return f"{site.scheme}://{site.netloc}"
+
+
+def _sps_document(status: int, raw: bytes, step: str) -> dict[str, object]:
+    if status == 401:
+        raise SessionExpiredError("the TDS session expired")
+    if status != 200:
+        raise SpsInfoError(f"SPS Info {step} status {status}")
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SpsInfoError("SPS Info did not return a document") from exc
+    if not isinstance(payload, dict):
+        raise SpsInfoError("SPS Info did not return a document")
+    return payload
+
+
+def request_sps_form(settings: Settings, exchange: Exchange) -> SporefForm:
+    """GET the SPOREF page with the API Management bearer and the saved access token."""
+    if not settings.access_token:
+        raise SessionExpiredError("there is no saved session")
+    origin = _site_origin(settings)
+    apim = _apim_token(settings, exchange)
+    status, raw = exchange(
+        "GET",
+        f"{settings.backend}/api/v1/spsCallibration/accessSPSCal",
+        None,
+        {
+            "Authorization": f"Bearer {apim}",
+            "X-EEID-Access-Token": settings.access_token,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Origin": origin,
+            "Referer": origin + "/",
+        },
+    )
+    if status != 200:
+        raise SessionExpiredError(f"SPS Info was refused ({status}; {_backend_error(raw)})")
+    return parse_sporef_form(raw)
+
+
+def submit_sporef_form(settings: Settings, form: SporefForm, exchange: Exchange) -> None:
+    """POST the handoff form to the gateway. The field values are not logged."""
+    target = urllib.parse.urlsplit(form.action)
+    gateway = urllib.parse.urlsplit(settings.gateway)
+    if target.scheme != "https" or not target.hostname or target.hostname != gateway.hostname:
+        raise SpsInfoError("the SPS Info form is not on the gateway")
+    origin = _site_origin(settings)
+    status, _raw = exchange(
+        "POST",
+        form.action,
+        urllib.parse.urlencode(form.fields).encode("utf-8"),
+        {
+            "content-type": "application/x-www-form-urlencoded",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Origin": origin,
+            "Referer": origin + "/",
+        },
+    )
+    if status != 200:
+        raise SpsInfoError(f"SPS Info was refused ({status})")
+
+
+def sync_sps_vin(settings: Settings, vin: str, bearer: str, exchange: Exchange) -> VinCatalog:
+    """GET the fixture, POST that same document to the programming sequence, and store the catalog."""
+    checked = check_vin(vin)
+    if not bearer or any(character.isspace() for character in bearer):
+        raise SpsInfoError("SPS Info did not return a session")
+    headers = {"Authorization": f"Bearer {bearer}", "Accept": "application/json, text/plain, */*"}
+    status, raw = exchange("GET", f"{settings.gateway}/spsinfo/vin/fixture/{checked}", None, headers)
+    fixture = _sps_document(status, raw, "fixture")
+    gateway = urllib.parse.urlsplit(settings.gateway)
+    status, sequence_raw = exchange(
+        "POST",
+        f"{settings.gateway}/spsinfo/progseq",
+        json.dumps(sequence_request(fixture), ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+        {
+            "Authorization": f"Bearer {bearer}",
+            "Accept": "*/*",
+            "content-type": "application/json",
+            "Origin": f"{gateway.scheme}://{gateway.netloc}",
+        },
+    )
+    sequence = _sps_document(status, sequence_raw, "sequence")
+    return save_vin(settings.download_dir / "spsinfo.sqlite", checked, fixture, sequence)

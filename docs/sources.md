@@ -128,6 +128,36 @@ The same page downloads the installer with `POST /cdn/files/public/downloadCrede
 `TLC Installer` `26.8.31.0` `INITIAL_SOFTWARE`. The file is
 `https://tlc-cdn.gm.com/cache-downloads/public/Prod/TLC_Installer/26_8_31_0/TLCSuite.exe`.
 
+## SPS Info catalog
+
+`spskit sps --vin` is one VIN the subscription can open. It is not a dump of every VIN.
+
+`GET /api/v1/spsCallibration/accessSPSCal` returns the SPOREF Redirection page. The form posts to
+`/authorization/oauth/user/sporef/ui` with `appParm` `sps2info`. The response sets a cookie named
+`SPS-INFO_ACCESS_TOKEN`. That cookie is the bearer on the calls below. The value is not written to the catalog.
+
+`GET /spsinfo/vin/fixture/{vin}` returns `controllerReferenceTree` and `spsvin`. `referenceTree` is a list of
+controllers. A controller is `[display name, functions]`. The display name has `controllerCode`, `controllerLabel`
+and `displayOrder`. A function is `[function, methods]` with `functionLabel` and `displayOrder`. A method is
+`[method, options]`. The method has `methodId`, `description` and `blockSameCal`. The options object has `type`,
+`currentSelectionIdx`, `selectedCodes` and `options`.
+
+`spsvin` holds the scalar vehicle fields, including `type`, the VIN split (`wmi`, `vds`, `vis`) and
+`modelDesignator`. `vciNumbers`, `copControllers` and `deviceList` are stored as JSON. `supportedControllers` is
+the controller list (`controllerId`, `displayName`, and the rest of that document). `asbuiltRpoCodes` is the RPO
+list. Any other `spsvin` field is kept in a JSON column. The fixture root also carries `displayName`,
+`controllerFunction`, `programmingMethod`, `productionOption` and `rpoCodes`, which the page sends back with the
+fixture.
+
+`POST /spsinfo/progseq` takes that fixture. The viewer first sets `displayName`, `controllerFunction` and
+`programmingMethod` from the chosen controller; the command uses the first method described as Normal. An
+unselected fixture is refused. The response has `calibrationData`, `moduleData`, `cvnMap`,
+`hasValidChainOfParts`, `adapterType` and `hasDependency`. `calibrationData` maps a slot to a list of
+`[part number, flag, label]`. `moduleData` is a list of `[slot, label]`. `cvnMap` maps a part number to its CVN.
+A later sync replaces the rows for that VIN.
+
+This does not download a calibration file and does not program a controller.
+
 ## Vehicle programming
 
 ISO 14229-1:2013 clause 15.4.4 (cited through `primarysource`) names SAE J2534 as the communication

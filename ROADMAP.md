@@ -53,6 +53,21 @@ so this package does not speak to a vehicle.
 | `sk.downloads.list` | `client.licensed_downloads()` asks for the Techline Connect installer and any other decimal resource the account can run | launcher resource 25 and permissions search | `[ok]` | `tests/test_downloads.py::test_the_installer_and_a_decimal_resource_are_listed` |
 | `sk.downloads.fetch` | `cli.run()` lists those files, and `--get` writes them under the download directory | same catalog | `[ok]` | `tests/test_downloads.py::test_downloads_lists_and_get_writes_the_file` |
 
+### SPS Info catalog
+
+One VIN the subscription can open. The rows are the controller tree and the calibration part numbers. They are not a calibration file, and they are not every GM VIN.
+
+| Id | Obligation | Spec | Status | Evidence |
+|---|---|---|---|---|
+| `sk.sps.vin` | `spsinfo.check_vin()` accepts one 17-character VIN and refuses I, O and Q | SPS Info viewer | `[ok]` | `tests/test_spsinfo.py::test_a_vin_must_be_seventeen_characters_without_i_o_or_q` |
+| `sk.sps.form` | `spsinfo.parse_sporef_form()` reads the form action and its fields | captured SPOREF page | `[ok]` | `tests/test_spsinfo.py::test_the_sporef_form_keeps_the_action_and_the_fields` |
+| `sk.sps.save` | `spsinfo.save_vin()` writes the fixture and the programming sequence, and a resync replaces that VIN | captured fixture and progseq | `[ok]` | `tests/test_spsinfo.py::test_the_catalog_is_replaced_when_the_same_vin_is_synced_again` |
+| `sk.sps.path` | `spsinfo.save_vin()` refuses a database inside the repository | local catalog file | `[ok]` | `tests/test_spsinfo.py::test_a_database_inside_the_repository_is_refused` |
+| `sk.sps.token` | `spsinfo.save_vin()` refuses a document that contains a JWT-shaped string | local catalog file | `[ok]` | `tests/test_spsinfo.py::test_a_token_shaped_string_is_refused` |
+| `sk.sps.sync` | `client.sync_sps_vin()` sends the bearer and posts the fixture document | captured progseq request | `[ok]` | `tests/test_spsinfo.py::test_sync_sends_the_bearer_and_posts_the_fixture` |
+| `sk.sps.handoff` | `client.request_sps_form()` asks for the SPOREF page with the saved session | captured accessSPSCal request | `[ok]` | `tests/test_spsinfo.py::test_sps_prints_the_catalog_path_and_not_the_bearer` |
+| `sk.cli.sps` | `cli.run()` prints the catalog counts and the sqlite path and does not print the bearer | SPS Info viewer | `[ok]` | `tests/test_spsinfo.py::test_sps_prints_the_catalog_path_and_not_the_bearer` |
+
 ### Not this slice
 
 | Id | Obligation | Spec | Status | Evidence |

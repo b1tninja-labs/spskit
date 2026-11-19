@@ -16,7 +16,10 @@ started yourself; set `TDS_CODE_VERIFIER` to that login's verifier.
 ```
 python -m spskit modules --id 25
 python -m spskit download --id 25
+python -m spskit sps --vin <VIN>
 ```
+
+`spskit sps --vin` writes that vehicle's module catalog to `spsinfo.sqlite` in the download directory.
 
 Files are written to `SPS_DOWNLOAD_DIR`. This package does not program a vehicle. That step needs a J2534
 pass-through, and SAE J2534 is not in the source library yet.
