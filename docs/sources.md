@@ -129,8 +129,10 @@ The same page downloads the installer with `POST /cdn/files/public/downloadCrede
 `https://tlc-cdn.gm.com/cache-downloads/public/Prod/TLC_Installer/26_8_31_0/TLCSuite.exe`.
 
 `TLCSuite.exe` installs three pieces: a bundled JDK, `TLCLauncher.exe`, and `TUM.exe`. jadx 1.5.6
-on the classes inside those two programs shows the handoff. The decompiled tree is not part of this
-repository.
+on the classes inside those two programs shows the handoff. The programs and the decompiled tree
+are kept in `local/tlc/`, which is gitignored. All three extracted executables are Launch4j stubs
+with a jar appended. Ghidra is for a later native program, such as `TechlineConnectLaunch.exe`,
+which is not in this installer.
 
 `TLCLauncher.exe` is `com.gm.cca.tlc.launcher.Main` from `tlc-launcher-client` 26.4.23.0. `main`
 strips the `tlc:,` prefix, splits on commas, and requires one field per `StartupArg` value. A
