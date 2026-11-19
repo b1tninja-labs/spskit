@@ -10,9 +10,13 @@ The sign-in host is `gmb2bciamprod.ciamlogin.com`. When it wants an email code i
 on that host. The verify call posts `continuationToken` and `otp`. A continued sign-in returns
 `state` `continue`.
 
-The password call that follows verification is a reset. `recover` returns `state` `methodUpdateRequired`
-and an `update` link. The update posts `continuationToken` and `newPassword`. This package refuses that
-step and does not send `TDS_PASSWORD`.
+The password call that follows verification is a reset. Verification that continues names `_links.next`
+`recover`. `recover` posts `continuationToken` and returns `state` `methodUpdateRequired` with an
+`update` link. The update is a PUT of `continuationToken` and `newPassword`. `newPassword` is
+`TDS_NEW_PASSWORD` when that is set, and `TDS_PASSWORD` (the current password) otherwise. A 504 is
+retried once. `methodUpdatePending` is polled with `continuationToken` only, up to five times, until
+`state` is `continue`. The login form's current password is the field `passwd`; it is not a second
+field on this PUT.
 
 ## Access token
 

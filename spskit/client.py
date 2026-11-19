@@ -16,7 +16,13 @@ from spskit.download import (
     parse_grant,
     save_bytes,
 )
-from spskit.signin import authorization_code, parse_access_token, refuse_password_update, token_form
+from spskit.signin import (
+    PasswordUpdateRequiredError,
+    authorization_code,
+    parse_access_token,
+    password_update_body,
+    token_form,
+)
 from spskit.verify import SessionExpiredError, VerificationChallenge, challenge_from_body, otp_message, prompt_code
 
 
@@ -92,12 +98,98 @@ def submit_code(
     payload = json.loads(raw.decode("utf-8"))
     if not isinstance(payload, dict):
         raise SessionExpiredError("verification response is not an object")
-    refuse_password_update(payload)
+    payload = _finish_password_update(settings, payload, exchange)
     if payload.get("state") != "continue":
         again = challenge_from_body(payload)
         if again is not None:
             raise SessionExpiredError("the host asked for the code again")
         raise SessionExpiredError("verification did not continue")
+    return payload
+
+
+def _host_path(href: object, marker: str) -> str:
+    if not isinstance(href, str) or not href.startswith("/") or "://" in href or "\\" in href or ".." in href:
+        raise PasswordUpdateRequiredError("the sign-in link is not a path on the sign-in host")
+    if marker not in href:
+        raise PasswordUpdateRequiredError("the sign-in link is not the password method")
+    return href
+
+
+def _link(payload: Mapping[str, object], name: str) -> str | None:
+    links = payload.get("_links")
+    if not isinstance(links, Mapping):
+        return None
+    link = links.get(name)
+    if not isinstance(link, Mapping):
+        return None
+    href = link.get("href")
+    return href if isinstance(href, str) else None
+
+
+def _post_json(
+    settings: Settings,
+    method: str,
+    href: str,
+    message: Mapping[str, str],
+    exchange: Exchange,
+) -> Mapping[str, object]:
+    status, raw = exchange(
+        method,
+        settings.ciam + href,
+        json.dumps(message).encode("utf-8"),
+        {"content-type": "application/json", "accept": "application/json"},
+    )
+    if status == 504 and method == "PUT":
+        status, raw = exchange(
+            method,
+            settings.ciam + href,
+            json.dumps(message).encode("utf-8"),
+            {"content-type": "application/json", "accept": "application/json"},
+        )
+    if status != 200:
+        raise SessionExpiredError(f"the password step was refused ({status})")
+    payload = json.loads(raw.decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise SessionExpiredError("the password step response is not an object")
+    return payload
+
+
+def _finish_password_update(
+    settings: Settings, payload: Mapping[str, object], exchange: Exchange
+) -> Mapping[str, object]:
+    """Walk recover, then PUT newPassword, then poll. The password is only on that PUT."""
+    token = payload.get("continuationToken")
+    nxt = _link(payload, "next")
+    if payload.get("state") == "continue" and isinstance(nxt, str) and nxt.endswith("/recover"):
+        if not isinstance(token, str):
+            raise PasswordUpdateRequiredError("missing continuation")
+        payload = _post_json(
+            settings, "POST", _host_path(nxt, "/auth/methods/password/"), {"continuationToken": token}, exchange
+        )
+        token = payload.get("continuationToken")
+    if payload.get("state") != "methodUpdateRequired":
+        return payload
+    update = _link(payload, "update")
+    if not isinstance(token, str):
+        raise PasswordUpdateRequiredError("missing continuation")
+    message = password_update_body(token, settings.new_password or settings.password)
+    update_path = _host_path(update, "/auth/methods/password/")
+    if update_path.rstrip("/").endswith("/recover") or update_path.rstrip("/").endswith("/pollUpdate"):
+        raise PasswordUpdateRequiredError("the update link is not the password method")
+    payload = _post_json(settings, "PUT", update_path, message, exchange)
+    for _poll in range(5):
+        if payload.get("state") != "methodUpdatePending":
+            break
+        token = payload.get("continuationToken")
+        if not isinstance(token, str):
+            raise PasswordUpdateRequiredError("missing continuation")
+        payload = _post_json(
+            settings,
+            "POST",
+            _host_path(_link(payload, "poll"), "/pollUpdate"),
+            {"continuationToken": token},
+            exchange,
+        )
     return payload
 
 
@@ -108,7 +200,8 @@ def exchange_authorization_code(settings: Settings, redirect_url: str, exchange:
     form = token_form(
         settings.client_id, settings.redirect_uri, authorization_code(redirect_url), settings.code_verifier
     )
-    if settings.password and settings.password in dict(form).values():
+    posted = dict(form).values()
+    if any(secret and secret in posted for secret in (settings.password, settings.new_password)):
         raise SessionExpiredError("refusing to send the stored password to the token endpoint")
     url = f"{settings.ciam}/{settings.tenant}/oauth2/v2.0/token"
     status, raw = exchange(

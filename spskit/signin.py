@@ -1,7 +1,9 @@
 """The sign-in steps the capture actually showed.
 
-The password call in that capture is a reset: the host said methodUpdateRequired and the
-browser posted newPassword. This module refuses that step. The stored password is not sent.
+The password call in that capture is a reset. The host said methodUpdateRequired and the
+browser posted continuationToken and newPassword. newPassword is TDS_NEW_PASSWORD when that
+is set, and TDS_PASSWORD otherwise (the current password). The token call still has no
+password field.
 
 The session the site keeps is an OAuth authorization code exchanged at the token endpoint.
 The code arrives on the redirect fragment. The code verifier is the one the person who
@@ -24,17 +26,20 @@ _VERIFIER = re.compile(r"[A-Za-z0-9._~-]{43,128}")
 
 
 class PasswordUpdateRequiredError(VerificationError):
-    """The host asked for a new password. The stored password is not a substitute."""
+    """The host asked for a new password and the local settings cannot supply one."""
 
 
 class TokenError(ValueError):
     """An authorization code or a token response cannot be used."""
 
 
-def refuse_password_update(payload: Mapping[str, object]) -> None:
-    """A methodUpdateRequired step wants newPassword. Do not post the stored password there."""
-    if payload.get("state") == "methodUpdateRequired":
-        raise PasswordUpdateRequiredError("the sign-in host asked for a new password; the stored password is not sent")
+def password_update_body(continuation_token: str, new_password: str) -> dict[str, str]:
+    """The reset body the capture posted: the continuation and the new password, and nothing else."""
+    if not continuation_token or any(character.isspace() for character in continuation_token):
+        raise PasswordUpdateRequiredError("missing continuation")
+    if not new_password:
+        raise PasswordUpdateRequiredError("set TDS_NEW_PASSWORD or TDS_PASSWORD")
+    return {"continuationToken": continuation_token, "newPassword": new_password}
 
 
 def authorization_code(redirect_url: str) -> str:

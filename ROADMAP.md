@@ -45,7 +45,7 @@ so this package does not speak to a vehicle.
 
 | Id | Obligation | Spec | Status | Evidence |
 |---|---|---|---|---|
-| `sk.sign-in.password` | `signin.refuse_password_update()` refuses a new-password step and does not send the stored password | captured password update | `[ok]` | `tests/test_signin.py::test_a_new_password_step_is_refused` |
+| `sk.sign-in.password` | `signin.password_update_body()` posts continuationToken and newPassword, using the new password when it is set | captured password update | `[ok]` | `tests/test_signin.py::test_the_password_update_posts_the_new_password_and_not_the_current_one` |
 | `sk.sign-in.code` | `signin.authorization_code()` reads the code from the TDS redirect fragment | captured redirect | `[ok]` | `tests/test_signin.py::test_the_redirect_code_is_the_fragment` |
 | `sk.sign-in.form` | `signin.token_form()` is the authorization-code form and has no password field | captured token request | `[ok]` | `tests/test_signin.py::test_the_token_form_has_no_password_field` |
 | `sk.sign-in.token` | `signin.parse_access_token()` keeps the access token and drops the refresh token | captured token response | `[ok]` | `tests/test_signin.py::test_the_access_token_is_kept_and_the_refresh_token_is_dropped` |

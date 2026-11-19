@@ -16,8 +16,8 @@ own ACDelco TDS subscription is licensed for.
 
 ## 2. What it does not do
 
-- It does not send `TDS_PASSWORD`. The captured password step is a reset (`newPassword` after
-  `methodUpdateRequired`). That step is refused.
+- The captured password step is a reset. It sends `newPassword` from `TDS_NEW_PASSWORD`, or from
+  `TDS_PASSWORD` when that is the only password set. It does not send either value to the token endpoint.
 - It does not talk to a vehicle. Programming a controller is a later step and needs the VCX/VXDIAG J2534
   pass-through. ISO 14229-1:2013 clause 15.4.4 names SAE J2534 as the link between the application and the
   service-tool hardware, and says the vehicle side uses manufacturer-proprietary information. SAE J2534 is not

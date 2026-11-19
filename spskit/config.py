@@ -20,7 +20,7 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class Settings:
-    """What a run needs. The password is held so a later sign-in step can read it; this slice never sends it."""
+    """What a run needs. TDS_NEW_PASSWORD is the reset value; TDS_PASSWORD is the current one."""
 
     username: str
     password: str
@@ -35,6 +35,7 @@ class Settings:
     zone: str = "America/Los_Angeles"
     code_verifier: str = ""
     token_file: pathlib.Path | None = None
+    new_password: str = ""
 
 
 def parse_env_text(text: str) -> dict[str, str]:
@@ -100,6 +101,7 @@ def settings_from(env: Mapping[str, str]) -> Settings:
         zone=env.get("TDS_ZONE", "America/Los_Angeles").strip() or "America/Los_Angeles",
         code_verifier=env.get("TDS_CODE_VERIFIER", "").strip(),
         token_file=token_file,
+        new_password=env.get("TDS_NEW_PASSWORD", ""),
     )
 
 

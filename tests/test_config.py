@@ -14,6 +14,7 @@ def test_the_example_names_the_secrets_and_leaves_them_empty():
     values = parse_env_text(EXAMPLE.read_text(encoding="utf-8"))
     assert values["TDS_USERNAME"] == ""
     assert values["TDS_PASSWORD"] == ""
+    assert values["TDS_NEW_PASSWORD"] == ""
     assert values["TDS_ACCESS_TOKEN"] == ""
     assert values["TDS_CODE_VERIFIER"] == ""
     assert values["TDS_TOKEN_FILE"] == ""
