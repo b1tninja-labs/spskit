@@ -263,6 +263,40 @@ def test_a_rejected_code_is_asked_again_without_a_new_email(tmp_path, capsys):
     assert saved["access_token"] == TOKEN
 
 
+def test_a_confirmation_page_is_posted_before_stay_signed_in():
+    settings = Settings(
+        "person@example.com",
+        "current-secret",
+        "https://gateway.example",
+        "https://ciam.example",
+        "",
+        Path("D:/data/spskit"),
+    )
+    requested = EmailRequest(
+        MfaChallenge(8, "flow-after-begin", "ctx-after-begin", "form-canary", "corr-begin", "person@example.com"),
+        "b" * 43,
+    )
+    cmsi = """<html><title>Sign in to your account</title><script>$Config={"sFT":"flow-cmsi",
+"sCtx":"ctx-cmsi","canary":"canary-cmsi","sessionId":"sess-cmsi","correlationId":"corr-cmsi",
+"pgid":"CmsiInterrupt","stsErrorCode":399218,"urlPost":"/appverify"};</script></html>"""
+
+    def exchange(_method, url, body, _headers):
+        if url.endswith("/ProcessAuth"):
+            return 200, cmsi.encode()
+        if url.endswith("/appverify"):
+            form = parse_qs(body.decode())
+            assert form["ContinueAuth"] == ["true"]
+            assert form["hpgrequestid"] == ["sess-cmsi"]
+            assert form["flowToken"] == ["flow-cmsi"]
+            assert "otc" not in form
+            return 200, KMSI.encode()
+        assert url.endswith("/kmsi")
+        assert "otc" not in parse_qs(body.decode())
+        return 302, REDIRECT.encode()
+
+    assert submit_email_code(settings, requested, "abcd1234", exchange) == REDIRECT
+
+
 def test_a_page_that_is_not_stay_signed_in_names_itself(tmp_path):
     settings = Settings(
         "person@example.com",

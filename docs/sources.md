@@ -30,6 +30,9 @@ and `mfaAuthMethod` `Email`. That response is the Redirecting page again (`stsEr
 and its `oPostParams` include `otc`. Posting that form to `urlPost` with `sso_reload=true` and the
 `ssoPulled` cookie returns the next page. A rejected code is page `FabricTFA` with `sErrorCode`
 `InvalidOneTimePasscode`. An accepted code is `KmsiInterrupt` (`sErrorCode` `50140`, `urlPost` `/kmsi`).
+The host can instead return `CmsiInterrupt` (`stsErrorCode` `399218`, `urlPost` `/appverify`). That post
+sends `ContinueAuth=true`, `ctx`, `hpgrequestid` from `sessionId`, `flowToken`, `canary`,
+`iscsrfspeedbump=false` and `i19`. The next page is the stay-signed-in form.
 `InvalidOneTimePasscode` keeps the same email and returns a new flow token; the command asks again
 and does not call `BeginAuth` a second time.
 `POST /kmsi` sends `LoginOptions=1`, `type=28`, `ctx`, `hpgrequestid` from the page `sessionId`, `flowToken`, `canary` and `i19`.

@@ -29,6 +29,7 @@ _CONFIG = "$Config="
 _BEGIN = "/common/SAS/BeginAuth"
 _PROCESS = "/common/SAS/ProcessAuth"
 _KMSI = "/kmsi"
+_APP_VERIFY = "/appverify"
 _COOKIE_NAME = re.compile(r"^[A-Za-z0-9_]{1,40}$")
 _LABEL = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 _PATH = re.compile(r"/[A-Za-z0-9_./-]{0,120}")
@@ -335,6 +336,27 @@ def submit_email_code(
         raise LoginError(f"the sign-in host rejected that code\n{detail}")
     if _error_code(page) == "InvalidOneTimePasscode":
         raise CodeRejectedError(_next_challenge(challenge, page))
+    if _is_app_verify(page):
+        status, raw = _post_app_verify(settings, page, exchange)
+        if status in (301, 302, 303, 307, 308):
+            return _redirect_url(status, raw)
+        if status != 200:
+            raise LoginError(f"the sign-in host refused the confirmation ({status})")
+        text = raw.decode("utf-8", errors="replace")
+        page = parse_page_config(text)
+        if page is None:
+            status, raw = _post_redirect(settings, exchange, text, settings.ciam + _APP_VERIFY)
+            if status != 200:
+                raise LoginError(
+                    f"the sign-in host refused the confirmation ({status})\n{describe_sign_in_page(text, status)}"
+                )
+            text = raw.decode("utf-8", errors="replace")
+            page = parse_page_config(text)
+        detail = describe_sign_in_page(text, status)
+        if page is None:
+            raise LoginError(f"the sign-in host rejected that code\n{detail}")
+        if _error_code(page) == "InvalidOneTimePasscode":
+            raise CodeRejectedError(_next_challenge(challenge, page))
     session_id = _text(page, "sessionId")
     ctx = _text(page, "sCtx")
     flow = _text(page, "sFT")
@@ -507,6 +529,32 @@ def _post_path(url: str) -> str:
     if _PATH.fullmatch(path) is None or ".." in path:
         return ""
     return path
+
+
+def _is_app_verify(page: Mapping[str, object]) -> bool:
+    if page.get("pgid") == "CmsiInterrupt":
+        return True
+    return _post_path(_text(page, "urlPost")).rstrip("/").endswith(_APP_VERIFY)
+
+
+def _post_app_verify(settings: Settings, page: Mapping[str, object], exchange: Exchange) -> tuple[int, bytes]:
+    """Confirm the sign-in. CmsiInterrupt is that prompt, and `/appverify` is where it posts."""
+    raw = _text(page, "urlPost")
+    url = _ciam_url(settings, raw) if raw else f"{settings.ciam}{_APP_VERIFY}"
+    if not urllib.parse.urlsplit(url).path.rstrip("/").endswith(_APP_VERIFY):
+        raise LoginError("the sign-in host did not ask for confirmation")
+    fields = [
+        ("ContinueAuth", "true"),
+        ("ctx", _text(page, "sCtx")),
+        ("hpgrequestid", _text(page, "sessionId")),
+        ("flowToken", _text(page, "sFT")),
+        ("canary", _text(page, "canary") or _text(page, "apiCanary")),
+        ("iscsrfspeedbump", "false"),
+        ("i19", "0"),
+    ]
+    if not all(value for name, value in fields if name not in {"i19", "iscsrfspeedbump"}):
+        raise LoginError("the sign-in host did not ask for confirmation")
+    return _form_call(exchange, url, fields, settings.ciam + _PROCESS, {"origin": settings.ciam})
 
 
 def _kmsi_url(settings: Settings, config: Mapping[str, object]) -> str:
