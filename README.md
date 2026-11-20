@@ -26,6 +26,8 @@ stores each one under `SPS_DOWNLOAD_DIR/cache/{id}/{version}/` and skips a file 
 there. Add `--refresh` to fetch it again.
 
 `spskit sps --vin` writes that vehicle's module catalog to `spsinfo.sqlite` in the download directory.
+`vit1.programming_data_request()` builds the K17 programming-data body from a saved module read and
+returns it.
 
 Files are written to `SPS_DOWNLOAD_DIR`. This package does not program a vehicle. That step needs a J2534
 pass-through, and SAE J2534 is not in the source library yet.

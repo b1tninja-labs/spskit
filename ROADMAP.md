@@ -71,6 +71,16 @@ One VIN the subscription can open. The rows are the controller tree and the cali
 | `sk.sps.handoff` | `client.request_sps_form()` asks for the SPOREF page with the saved session | captured accessSPSCal request | `[ok]` | `tests/test_spsinfo.py::test_sps_prints_the_catalog_path_and_not_the_bearer` |
 | `sk.cli.sps` | `cli.run()` prints the catalog counts and the sqlite path and does not print the bearer | SPS Info viewer | `[ok]` | `tests/test_spsinfo.py::test_sps_prints_the_catalog_path_and_not_the_bearer` |
 
+### Programming data
+
+The body of `POST /sps/legacy/cloud/getProgrammingData` for brake controller K17. A saved module
+read supplies the VIT1 control-module block. The function returns that body. A live post waits
+until a real read is on disk.
+
+| Id | Obligation | Spec | Status | Evidence |
+|---|---|---|---|---|
+| `sk.vit1.request` | `vit1.programming_data_request()` attaches a saved K17 module read as VIT1 control-module blocks on the controller | saved module read; the traced post with no vit1 is `VIT_NO_VALID_CMB` | `[ok]` | `tests/test_vit1.py::test_a_saved_k17_read_is_the_vit1_block_on_the_request` |
+
 ### Not this slice
 
 | Id | Obligation | Spec | Status | Evidence |

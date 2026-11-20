@@ -16,6 +16,10 @@ own ACDelco TDS subscription is licensed for.
   leaves a file that is already there. `--refresh` fetches it again.
 - `spskit sps --vin` reads the SPS Info catalog for that one VIN and writes it to `SPS_DOWNLOAD_DIR/spsinfo.sqlite`.
   Running it again replaces that VIN. The file holds module names and part numbers.
+- `vit1.programming_data_request()` builds `POST /sps/legacy/cloud/getProgrammingData` for brake
+  controller K17 (device 40, request method 11228). A saved module read is attached as the VIT1
+  control-module block on the sequence: `vin` from DID `$90`, one decimal `partno` per DID `$C1`
+  through `$CA` (4 bytes from byte 1), and `ssecuhn` from DID `$CC`. The function returns the body.
 - `spskit login` posts the password and asks the host to email a code. It writes the challenge to the
   session file and does not write the code. `spskit code` reads that challenge, waits for the code, and
   writes the access token from the redirect. A dropped connection retries, and `spskit code` can be
@@ -37,6 +41,8 @@ own ACDelco TDS subscription is licensed for.
   in `primarysource`, so `obd-bridge` does not grow a pass-through in this change, and this package does not
   invent one.
 - It does not implement security access or a calibration transfer. `spskit sps --vin` does not download a calibration file.
+- The K17 programming-data body stays in the process. Sending it waits for a module read saved
+  outside the repository. Service `$27` and a calibration download stay out of this package.
 
 ## 3. Commands
 
