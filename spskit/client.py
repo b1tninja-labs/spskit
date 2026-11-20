@@ -7,6 +7,7 @@ import pathlib
 import re
 import urllib.parse
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from typing import Protocol
 
 from spskit.catalog import (
@@ -29,11 +30,15 @@ from spskit.download import (
     parse_grant,
     save_cached,
 )
+from spskit.session import access_expiring, session_path, write_session
 from spskit.signin import (
     PasswordUpdateRequiredError,
+    TokenPair,
     authorization_code,
-    parse_access_token,
+    parse_refresh_response,
+    parse_token_pair,
     password_update_body,
+    refresh_form,
     token_form,
 )
 from spskit.spsinfo import (
@@ -310,8 +315,8 @@ def _finish_password_update(
     return payload
 
 
-def exchange_authorization_code(settings: Settings, redirect_url: str, exchange: Exchange) -> str:
-    """Trade the redirect code for an access token. The refresh token in the response is discarded."""
+def exchange_authorization_code(settings: Settings, redirect_url: str, exchange: Exchange) -> TokenPair:
+    """Trade the redirect code for an access token and a refresh token."""
     if not settings.code_verifier:
         raise SessionExpiredError("TDS_CODE_VERIFIER is empty")
     form = token_form(
@@ -337,7 +342,50 @@ def exchange_authorization_code(settings: Settings, redirect_url: str, exchange:
     payload = json.loads(raw.decode("utf-8"))
     if not isinstance(payload, dict):
         raise SessionExpiredError("token response is not an object")
-    return parse_access_token(payload)
+    return parse_token_pair(payload)
+
+
+def refresh_access_token(settings: Settings, refresh_token: str, exchange: Exchange) -> TokenPair:
+    """Exchange the refresh token for a new access token. RFC 6749 section 6."""
+    form = refresh_form(settings.client_id, refresh_token)
+    posted = dict(form).values()
+    if any(secret and secret in posted for secret in (settings.password, settings.new_password)):
+        raise SessionExpiredError("refusing to send the stored password to the token endpoint")
+    url = f"{settings.ciam}/{settings.tenant}/oauth2/v2.0/token"
+    origin = urllib.parse.urlsplit(settings.redirect_uri)
+    status, raw = exchange(
+        "POST",
+        url,
+        urllib.parse.urlencode(form).encode("utf-8"),
+        {
+            "content-type": "application/x-www-form-urlencoded",
+            "accept": "application/json",
+            "origin": f"{origin.scheme}://{origin.netloc}",
+        },
+    )
+    if status != 200:
+        raise SessionExpiredError(f"the token endpoint refused the refresh token ({status}; {_token_error(raw)})")
+    payload = json.loads(raw.decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise SessionExpiredError("token response is not an object")
+    return parse_refresh_response(payload, refresh_token)
+
+
+def renew_access_token(settings: Settings, exchange: Exchange) -> Settings:
+    """Refresh the saved access token when it expires within a minute."""
+    if not settings.refresh_token:
+        return settings
+    if settings.access_token and not access_expiring(settings.access_token):
+        return settings
+    pair = refresh_access_token(settings, settings.refresh_token, exchange)
+    path = settings.token_file or session_path(settings)
+    write_session(path, pair.access_token, refresh_token=pair.refresh_token)
+    return replace(
+        settings,
+        access_token=pair.access_token,
+        refresh_token=pair.refresh_token,
+        token_file=path,
+    )
 
 
 def _token_error(raw: bytes) -> str:

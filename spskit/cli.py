@@ -30,6 +30,7 @@ from spskit.client import (
     list_modules,
     open_backend_session,
     open_gateway_session,
+    renew_access_token,
     request_sps_form,
     store_licensed,
     submit_code,
@@ -450,10 +451,10 @@ def run(
                     del code
                     break
             settings = replace(settings, code_verifier=verifier)
-            access = exchange_authorization_code(settings, redirect, exchange)
-            write_session(path, access, backend_pending=True)
-            open_backend_session(settings, access, exchange)
-            write_session(path, access)
+            pair = exchange_authorization_code(settings, redirect, exchange)
+            write_session(path, pair.access_token, refresh_token=pair.refresh_token, backend_pending=True)
+            open_backend_session(settings, pair.access_token, exchange)
+            write_session(path, pair.access_token, refresh_token=pair.refresh_token)
             clear_sign_in(path)
             print(f"wrote the session to {path}")
             return 0
@@ -463,13 +464,13 @@ def run(
             write_session(path, emailed)
             print(f"wrote the session to {path}")
             return 0
-        settings = apply_saved_session(settings)
+        settings = renew_access_token(apply_saved_session(settings), exchange)
         if args.command == "token":
-            access = exchange_authorization_code(settings, args.redirect, exchange)
+            pair = exchange_authorization_code(settings, args.redirect, exchange)
             path = session_path(settings)
-            write_session(path, access, backend_pending=True)
-            open_backend_session(settings, access, exchange)
-            write_session(path, access)
+            write_session(path, pair.access_token, refresh_token=pair.refresh_token, backend_pending=True)
+            open_backend_session(settings, pair.access_token, exchange)
+            write_session(path, pair.access_token, refresh_token=pair.refresh_token)
             print(f"wrote the session to {path}")
             return 0
         if args.command == "verify":

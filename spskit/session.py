@@ -5,11 +5,13 @@ An access token the person already holds can be saved here. A verification code 
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 from spskit.config import ConfigError, Settings
@@ -43,6 +45,21 @@ def accept_token(token: str) -> str:
     return token
 
 
+def access_expiring(token: str, *, within_seconds: int = 60) -> bool:
+    """A JWT whose ``exp`` is within ``within_seconds`` of now, including one already past."""
+    parts = token.split(".")
+    if len(parts) != 3:
+        return False
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (-len(parts[1]) % 4)))
+    except (ValueError, json.JSONDecodeError):
+        return False
+    exp = payload.get("exp") if isinstance(payload, dict) else None
+    if not isinstance(exp, int):
+        return False
+    return exp <= int(datetime.now(UTC).timestamp()) + within_seconds
+
+
 def prompt_emailed_token(reader: Callable[[str], str]) -> str:
     """Ask once for an access token the person already holds. The token is not printed."""
     return accept_token(reader(_PROMPT).strip())
@@ -66,11 +83,19 @@ def _write_object(path: Path, payload: dict[str, object]) -> None:
     destination.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
 
-def write_session(path: Path, token: str, *, backend_pending: bool = False) -> None:
-    """Write the access token. Callers pass a path from `session_path`."""
+def write_session(
+    path: Path,
+    token: str,
+    *,
+    refresh_token: str | None = None,
+    backend_pending: bool = False,
+) -> None:
+    """Write the access token. A refresh token, when given, is stored beside it."""
     kept = accept_token(token)
     payload = _read_object(path)
     payload["access_token"] = kept
+    if refresh_token is not None:
+        payload["refresh_token"] = accept_token(refresh_token)
     if backend_pending:
         payload["backend_pending"] = True
     else:
@@ -292,7 +317,10 @@ def apply_saved_session(settings: Settings) -> Settings:
     path = session_path(settings)
     if settings.access_token or not path.is_file():
         return replace(settings, token_file=path)
-    token = _read_object(path).get("access_token")
+    payload = _read_object(path)
+    token = payload.get("access_token")
     if not isinstance(token, str) or not token:
         return replace(settings, token_file=path)
-    return replace(settings, access_token=accept_token(token), token_file=path)
+    refresh = payload.get("refresh_token")
+    kept_refresh = accept_token(refresh) if isinstance(refresh, str) and refresh else ""
+    return replace(settings, access_token=accept_token(token), refresh_token=kept_refresh, token_file=path)

@@ -91,7 +91,13 @@ def test_token_command_writes_the_token_and_does_not_print_it(tmp_path, capsys):
         assert method == "POST"
         if url.endswith("/token"):
             assert b"stored-password" not in body
-            return 200, json.dumps({"token_type": "Bearer", "access_token": "access-token-value-0001"}).encode()
+            return 200, json.dumps(
+                {
+                    "token_type": "Bearer",
+                    "access_token": "access-token-value-0001",
+                    "refresh_token": "refresh-token-value-0001",
+                }
+            ).encode()
         assert body == b""
         assert headers["Origin"] == "https://www.acdelcotds.com"
         assert headers["Authorization"] == "Bearer header.payload.signature"
@@ -100,8 +106,12 @@ def test_token_command_writes_the_token_and_does_not_print_it(tmp_path, capsys):
 
     code = run(["--env", str(env), "token", "--redirect", REDIRECT], exchange)
     assert code == 0
-    assert "access-token-value-0001" not in capsys.readouterr().out
-    assert json.loads(token_file.read_text(encoding="utf-8"))["access_token"] == "access-token-value-0001"
+    printed = capsys.readouterr().out
+    saved = json.loads(token_file.read_text(encoding="utf-8"))
+    assert "access-token-value-0001" not in printed
+    assert "refresh-token-value-0001" not in printed
+    assert saved["access_token"] == "access-token-value-0001"
+    assert saved["refresh_token"] == "refresh-token-value-0001"
 
 
 def test_session_prompts_for_the_emailed_token_and_later_gateway_calls_omit_it(tmp_path, capsys):

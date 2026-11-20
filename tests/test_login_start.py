@@ -246,7 +246,9 @@ def test_a_rejected_code_is_asked_again_without_a_new_email(tmp_path, capsys):
         if url.endswith("/kmsi"):
             return 302, REDIRECT.encode()
         if url.endswith("/token"):
-            return 200, json.dumps({"token_type": "Bearer", "access_token": TOKEN}).encode()
+            return 200, json.dumps(
+                {"token_type": "Bearer", "access_token": TOKEN, "refresh_token": "refresh-token-value-0001"}
+            ).encode()
         assert headers["Authorization"] == "Bearer header.payload.signature"
         assert headers["X-EEID-Access-Token"] == TOKEN
         return 200, b"{}"
@@ -517,7 +519,9 @@ def test_login_posts_the_password_then_waits_for_the_email_code(tmp_path, capsys
         if url.endswith("/token"):
             assert b"current-secret" not in body
             assert b"abcd1234" not in body
-            return 200, json.dumps({"token_type": "Bearer", "access_token": TOKEN}).encode()
+            return 200, json.dumps(
+                {"token_type": "Bearer", "access_token": TOKEN, "refresh_token": "refresh-token-value-0001"}
+            ).encode()
         assert url.startswith("https://backend.example/api/v1/login")
         assert body == b""
         assert headers["Origin"] == "https://www.acdelcotds.com"
@@ -605,7 +609,9 @@ def test_a_saved_stay_signed_in_finishes_without_a_new_email(tmp_path, capsys):
             return 302, REDIRECT.encode()
         if url.endswith("/token"):
             assert b"abcd1234" not in body
-            return 200, json.dumps({"token_type": "Bearer", "access_token": TOKEN}).encode()
+            return 200, json.dumps(
+                {"token_type": "Bearer", "access_token": TOKEN, "refresh_token": "refresh-token-value-0001"}
+            ).encode()
         assert headers["Authorization"] == "Bearer header.payload.signature"
         assert headers["X-EEID-Access-Token"] == TOKEN
         return 200, b"{}"

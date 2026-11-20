@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 import urllib.parse
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from spskit.verify import VerificationError
 
@@ -72,12 +73,58 @@ def token_form(client_id: str, redirect_uri: str, code: str, code_verifier: str)
     ]
 
 
+@dataclass(frozen=True, slots=True)
+class TokenPair:
+    """The access token and the refresh token. ``repr`` names neither value."""
+
+    access_token: str
+    refresh_token: str
+
+    def __repr__(self) -> str:
+        return "TokenPair()"
+
+
+def _token_value(payload: Mapping[str, object], name: str) -> str:
+    token = payload.get(name)
+    if not isinstance(token, str) or len(token) < 20 or any(character.isspace() for character in token):
+        raise TokenError(f"{name.replace('_', ' ')} is missing")
+    return token
+
+
 def parse_access_token(payload: Mapping[str, object]) -> str:
-    """Return the access token only. A refresh token in the same object is not returned."""
+    """Return the access token. The refresh token is a separate field."""
     kind = payload.get("token_type")
-    token = payload.get("access_token")
     if not isinstance(kind, str) or not kind.strip():
         raise TokenError("token type is missing")
-    if not isinstance(token, str) or len(token) < 20 or any(character.isspace() for character in token):
-        raise TokenError("access token is missing")
-    return token
+    return _token_value(payload, "access_token")
+
+
+def parse_token_pair(payload: Mapping[str, object]) -> TokenPair:
+    """Keep both tokens from the authorization-code response."""
+    return TokenPair(parse_access_token(payload), _token_value(payload, "refresh_token"))
+
+
+def refresh_form(client_id: str, refresh_token: str) -> list[tuple[str, str]]:
+    """The refresh grant from RFC 6749 section 6.
+
+    ``grant_type`` is ``refresh_token`` and ``refresh_token`` is the issued token.
+    ``client_id`` identifies this public client, the same way the code grant does.
+    ``scope`` is the scope that grant already requested. No password field is included.
+    """
+    if not client_id or any(character.isspace() for character in client_id):
+        raise TokenError("client id is missing")
+    _token_value({"refresh_token": refresh_token}, "refresh_token")
+    return [
+        ("client_id", client_id),
+        ("scope", f"{client_id}/.default openid profile offline_access"),
+        ("refresh_token", refresh_token),
+        ("grant_type", "refresh_token"),
+    ]
+
+
+def parse_refresh_response(payload: Mapping[str, object], current_refresh: str) -> TokenPair:
+    """Read a refresh response. A new refresh token replaces the one that was sent."""
+    access = parse_access_token(payload)
+    if "refresh_token" not in payload:
+        return TokenPair(access, current_refresh)
+    return TokenPair(access, _token_value(payload, "refresh_token"))

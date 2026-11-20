@@ -5,14 +5,15 @@ import urllib.parse
 
 import pytest
 
-from spskit.client import exchange_authorization_code, open_backend_session, submit_code
+from spskit.client import exchange_authorization_code, open_backend_session, renew_access_token, submit_code
 from spskit.config import Settings
 from spskit.signin import (
     PasswordUpdateRequiredError,
     TokenError,
     authorization_code,
-    parse_access_token,
+    parse_token_pair,
     password_update_body,
+    refresh_form,
     token_form,
 )
 from spskit.verify import SessionExpiredError, parse_challenge
@@ -108,16 +109,22 @@ def test_the_token_form_has_no_password_field():
     assert "newPassword" not in form
 
 
-def test_the_access_token_is_kept_and_the_refresh_token_is_dropped():
-    token = parse_access_token(
+def test_the_token_pair_keeps_the_refresh_token():
+    pair = parse_token_pair(
         {
             "token_type": "Bearer",
             "access_token": "access-token-value-0001",
             "refresh_token": "refresh-token-value-0001",
         }
     )
-    assert token == "access-token-value-0001"
-    assert "refresh" not in token
+    assert pair.access_token == "access-token-value-0001"
+    assert pair.refresh_token == "refresh-token-value-0001"
+    assert "refresh-token-value-0001" not in repr(pair)
+    form = dict(refresh_form("client", pair.refresh_token))
+    assert form["grant_type"] == "refresh_token"
+    assert form["refresh_token"] == pair.refresh_token
+    assert form["scope"] == "client/.default openid profile offline_access"
+    assert "password" not in form
 
 
 def test_the_code_is_exchanged_and_the_profile_is_discarded(tmp_path):
@@ -145,7 +152,11 @@ def test_the_code_is_exchanged_and_the_profile_is_discarded(tmp_path):
             assert headers["origin"] == "https://www.acdelcotds.com"
             assert "stored-password" not in body.decode()
             return 200, json.dumps(
-                {"token_type": "Bearer", "access_token": "access-token-value-0001", "refresh_token": "refresh-secret"}
+                {
+                    "token_type": "Bearer",
+                    "access_token": "access-token-value-0001",
+                    "refresh_token": "refresh-token-value-0001",
+                }
             ).encode()
         assert headers["Authorization"] == "Bearer header.payload.signature"
         assert headers["X-EEID-Access-Token"] == "access-token-value-0001"
@@ -155,9 +166,10 @@ def test_the_code_is_exchanged_and_the_profile_is_discarded(tmp_path):
         assert "zoneId=America%2FLos_Angeles" in url
         return 200, json.dumps({"email": "person@example.com", "phone": "000"}).encode()
 
-    access = exchange_authorization_code(settings, REDIRECT, exchange)
-    open_backend_session(settings, access, exchange)
-    assert access == "access-token-value-0001"
+    pair = exchange_authorization_code(settings, REDIRECT, exchange)
+    open_backend_session(settings, pair.access_token, exchange)
+    assert pair.access_token == "access-token-value-0001"
+    assert pair.refresh_token == "refresh-token-value-0001"
     assert seen[2][1] == b""
 
 
@@ -214,3 +226,47 @@ def test_a_refused_backend_names_the_error_and_hides_a_token(tmp_path):
     with pytest.raises(SessionExpiredError, match="Unauthorized") as caught:
         open_backend_session(settings, "access-token-value-0001", exchange)
     assert "header.payload.signature" not in str(caught.value)
+
+
+def _jwt(exp: int) -> str:
+    import base64
+
+    body = base64.urlsafe_b64encode(json.dumps({"exp": exp}).encode()).decode().rstrip("=")
+    return f"header.{body}.sig"
+
+
+def test_a_refresh_replaces_the_access_token_and_a_new_refresh_token(tmp_path):
+    expired = _jwt(1)
+    settings = Settings(
+        username="person",
+        password="stored-password",
+        gateway="https://gateway.example",
+        ciam="https://ciam.example",
+        access_token=expired,
+        download_dir=tmp_path,
+        refresh_token="refresh-token-value-0001",
+        token_file=tmp_path / "session.json",
+    )
+    seen: list[str] = []
+
+    def exchange(_method, url, body, _headers):
+        assert url.endswith("/oauth2/v2.0/token")
+        posted = urllib.parse.parse_qs(body.decode())
+        seen.append(posted["grant_type"][0])
+        assert posted["refresh_token"] == ["refresh-token-value-0001"]
+        assert "stored-password" not in body.decode()
+        return 200, json.dumps(
+            {
+                "token_type": "Bearer",
+                "access_token": "access-token-value-0002",
+                "refresh_token": "refresh-token-value-0002",
+            }
+        ).encode()
+
+    renewed = renew_access_token(settings, exchange)
+    assert seen == ["refresh_token"]
+    assert renewed.access_token == "access-token-value-0002"
+    assert renewed.refresh_token == "refresh-token-value-0002"
+    saved = json.loads((tmp_path / "session.json").read_text(encoding="utf-8"))
+    assert saved["refresh_token"] == "refresh-token-value-0002"
+    assert "refresh-token-value-0002" not in repr(renewed)

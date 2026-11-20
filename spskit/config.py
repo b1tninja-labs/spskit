@@ -6,7 +6,7 @@ import os
 import pathlib
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from spskit.signin import APIM_URL, PUBLIC_CLIENT_ID, REDIRECT_URI, TENANT_ID
 
@@ -37,6 +37,7 @@ class Settings:
     code_verifier: str = ""
     token_file: pathlib.Path | None = None
     new_password: str = ""
+    refresh_token: str = field(default="", repr=False)
 
 
 def parse_env_text(text: str) -> dict[str, str]:
