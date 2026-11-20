@@ -68,9 +68,10 @@ flags) or a `DLSDownloadServer` (a URI, an Akamai flag, and a description).
 
 `vit1.programming_data_request()` builds that body for K17, K33, K20, and K9. A saved module read
 supplies the VIT1 control-module block on `controller`: `vin` from DID `$90`, one decimal `partno`
-per part DID, and `ssecuhn` from DID `$CC`. K33, K20, and K9 take the hardware id as 4 bytes from
-byte 1. K9's part list continues through `$4A`. K20 also carries `cvn_in_vit1` from the read. The
-traced post of K17 with no `vit1` is `D:\data\spskit\re\programming-data-k17.json`, `errorCode`
+per part DID, and `ssecuhn` as the hardware string the reader stored. K9's part list continues
+through `$4A`. K20 carries `cvn_in_vit1` as `1` or `0`, and a `1` also carries `partnum`. The
+programming-data writer is Gson, so the VIN and the option composite use `type`. The traced post
+of K17 with no `vit1` is `D:\data\spskit\re\programming-data-k17.json`, `errorCode`
 `VIT_NO_VALID_CMB`. The function returns the body. A live post waits until a real read is on disk.
 
 ## Where the bytes go

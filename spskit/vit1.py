@@ -31,18 +31,18 @@ class _ReadRule:
     device_id: int
     request_method: int
     part_dids: tuple[str, ...]
-    hardware_decimal: bool
     cvn: bool
 
 
-# Hardware length and start byte are 0 on K17, so ssecuhn stays the string from the read.
-# On K33, K20, and K9 they are 4 and 1, the same slice as a part number.
-# K20 sets readCvn and the request method names no CVN DID, so cvn_in_vit1 is that string.
+# ssecuhn is the string the reader already stored. The request-method hardware
+# length and start byte are copied into the native record, and the function
+# that would apply them to DID CC was not found. readCvn names no DID.
+# cvn_in_vit1 is the character 1 or 0. The digits sit in partnum after a hyphen.
 _RULES = (
-    _ReadRule("K17", K17_DEVICE_ID, K17_REQUEST_METHOD, PART_DIDS, False, False),
-    _ReadRule("K33", 153, 11231, PART_DIDS, True, False),
-    _ReadRule("K20", 17, 11229, PART_DIDS, True, True),
-    _ReadRule("K9", 64, 410, PART_DIDS + _PARTS_41_4A, True, False),
+    _ReadRule("K17", K17_DEVICE_ID, K17_REQUEST_METHOD, PART_DIDS, False),
+    _ReadRule("K33", 153, 11231, PART_DIDS, False),
+    _ReadRule("K20", 17, 11229, PART_DIDS, True),
+    _ReadRule("K9", 64, 410, PART_DIDS + _PARTS_41_4A, False),
 )
 _BY_CODE = {rule.code: rule for rule in _RULES}
 
@@ -68,8 +68,8 @@ def decimal_partno(payload: bytes) -> str:
 def k17_attributes(*, vin: str, parts: Mapping[str, bytes], ssecuhn: str) -> tuple[tuple[str, str], ...]:
     """Pair a K17 read: vin from DID $90, one partno per $C1 through $CA, ssecuhn from $CC.
 
-    Hardware length and start byte on this request method are both 0, so ssecuhn
-    is the string from the read. The four-byte part slice is only for the part DIDs.
+    The four-byte part slice is only for the part DIDs. ssecuhn is the string
+    the reader stored.
     """
     return module_attributes("K17", vin=vin, parts=parts, hardware=ssecuhn)
 
@@ -79,37 +79,28 @@ def module_attributes(
     *,
     vin: str,
     parts: Mapping[str, bytes],
-    hardware: bytes | str,
+    hardware: str,
     cvn: str | None = None,
+    partnums: Sequence[str] = (),
 ) -> tuple[tuple[str, str], ...]:
     """Pair a saved read for K17, K33, K20, or K9.
 
     Parts are 4 bytes from byte 1, printed in base 10, in request-method order.
-    K33, K20, and K9 store ``ssecuhn`` the same way. K17 keeps the hardware string.
-    K20's ``cvn_in_vit1`` is the string from the read. That request method names no CVN DID.
+    ``hardware`` is the ``ssecuhn`` string the reader stored. K20's ``cvn_in_vit1``
+    is ``1`` or ``0``. When it is ``1``, each ``partnum`` is the part string, a
+    hyphen, and the decimal from that part cell. The request method names no CVN DID.
     """
     rule = _BY_CODE.get(code)
     if rule is None:
         raise Vit1Error("a module read is K17, K33, K20, or K9")
     checked = _vin(vin)
+    if not isinstance(hardware, str) or hardware == "":
+        raise Vit1Error("ssecuhn is the hardware string from the read")
     if set(parts) != set(rule.part_dids):
         raise Vit1Error(f"{rule.code} needs one part payload per part DID on its request method")
-    if rule.hardware_decimal:
-        if not isinstance(hardware, bytes | bytearray):
-            raise Vit1Error(f"{rule.code} hardware DID CC is 4 bytes from byte 1")
-        ssecuhn = decimal_partno(bytes(hardware))
-    else:
-        if not isinstance(hardware, str) or hardware == "":
-            raise Vit1Error("ssecuhn is the hardware id from DID CC")
-        ssecuhn = hardware
     partnos = tuple(("partno", decimal_partno(parts[did])) for did in rule.part_dids)
-    if rule.cvn:
-        if not isinstance(cvn, str) or cvn == "":
-            raise Vit1Error("K20 stores cvn_in_vit1 from the module read")
-        return (("ssecuhn", ssecuhn), ("vin", checked), *partnos, ("cvn_in_vit1", cvn))
-    if cvn is not None:
-        raise Vit1Error("CVN stays off this request")
-    return (("ssecuhn", ssecuhn), ("vin", checked), *partnos)
+    numbers = _cvn_tail(rule, cvn, partnums)
+    return (("ssecuhn", hardware), ("vin", checked), *partnos, *numbers)
 
 
 def build_vit1(attributes: Sequence[tuple[str, str]]) -> dict[str, object]:
@@ -171,8 +162,14 @@ def programming_data_request(
         raise Vit1Error(f"a {rule.code} read does not match its request method")
     if names.count("cvn_in_vit1") != cvn_count:
         if rule.cvn:
-            raise Vit1Error("K20 stores one cvn_in_vit1 from the module read")
+            raise Vit1Error("K20 stores cvn_in_vit1 as 1 or 0")
         raise Vit1Error("CVN stays off this request")
+    cvn_values = [value for name, value in pairs if name == "cvn_in_vit1"]
+    partnum_count = names.count("partnum")
+    if cvn_values == ["1"] and partnum_count == 0:
+        raise Vit1Error("cvn_in_vit1 1 carries at least one partnum")
+    if cvn_values != ["1"] and partnum_count:
+        raise Vit1Error("partnum belongs with cvn_in_vit1 1")
     if any(name in _SECURITY for name, _ in pairs):
         raise Vit1Error("security access stays off this request")
     for name, value in pairs:
@@ -182,8 +179,10 @@ def programming_data_request(
             raise Vit1Error("a partno is the decimal from 4 bytes of the part DID")
         elif name == "ssecuhn" and value == "":
             raise Vit1Error("ssecuhn is the hardware id from DID CC")
-        elif name == "cvn_in_vit1" and value == "":
-            raise Vit1Error("K20 stores cvn_in_vit1 from the module read")
+        elif name == "cvn_in_vit1" and value not in {"0", "1"}:
+            raise Vit1Error("cvn_in_vit1 is 1 or 0")
+        elif name == "partnum":
+            _check_partnum(value)
         elif name == "controller_supported" and value == "0":
             raise Vit1Error("the module read says the controller is unsupported")
     vit1 = build_vit1(pairs)
@@ -203,6 +202,35 @@ def programming_data_request(
         "mcvm": None,
         "optionComposite": _document(option_composite, "optionComposite"),
     }
+
+
+def _cvn_tail(rule: _ReadRule, cvn: str | None, partnums: Sequence[str]) -> tuple[tuple[str, str], ...]:
+    if not rule.cvn:
+        if cvn is not None or partnums:
+            raise Vit1Error("CVN stays off this request")
+        return ()
+    if cvn not in {"0", "1"}:
+        raise Vit1Error("cvn_in_vit1 is 1 or 0")
+    if cvn == "0":
+        if partnums:
+            raise Vit1Error("partnum belongs with cvn_in_vit1 1")
+        return (("cvn_in_vit1", "0"),)
+    if not partnums:
+        raise Vit1Error("cvn_in_vit1 1 carries at least one partnum")
+    for value in partnums:
+        _check_partnum(value)
+    return (*(("partnum", value) for value in partnums), ("cvn_in_vit1", "1"))
+
+
+def _check_partnum(value: str) -> None:
+    pieces = value.split("-")
+    if (
+        len(pieces) != 2
+        or pieces[0] == ""
+        or not pieces[1].isdigit()
+        or (len(pieces[1]) > 1 and pieces[1].startswith("0"))
+    ):
+        raise Vit1Error("partnum is the part string, a hyphen, and a decimal")
 
 
 def _rule_for(controller: Mapping[str, object]) -> _ReadRule:

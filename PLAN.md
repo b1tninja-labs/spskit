@@ -19,9 +19,10 @@ own ACDelco TDS subscription is licensed for.
 - `vit1.programming_data_request()` builds `POST /sps/legacy/cloud/getProgrammingData` for K17
   (device 40, request method 11228), K33 (153, 11231), K20 (17, 11229), and K9 (64, 410). A saved
   module read is attached as the VIT1 control-module block: `vin` from DID `$90`, one decimal
-  `partno` per part DID (4 bytes from byte 1), and `ssecuhn` from DID `$CC`. K33, K20, and K9 take
-  that hardware id as the same 4-byte decimal. K9 adds part DIDs `$41` through `$4A`. K20 also
-  carries `cvn_in_vit1` as the string from the read. The function returns the body.
+  `partno` per part DID (4 bytes from byte 1), and `ssecuhn` as the hardware string the reader
+  stored. K9 adds part DIDs `$41` through `$4A`. K20 carries `cvn_in_vit1` as `1` or `0`. A `1`
+  also carries `partnum` values, each a part string, a hyphen, and a decimal. The function returns
+  the body. Gson writes `type`, not a Jackson `@type`, on the VIN and the option composite.
 - `spskit login` posts the password and asks the host to email a code. It writes the challenge to the
   session file and does not write the code. `spskit code` reads that challenge, waits for the code, and
   writes the access token from the redirect. A dropped connection retries, and `spskit code` can be
