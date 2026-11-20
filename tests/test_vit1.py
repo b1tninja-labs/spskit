@@ -11,6 +11,7 @@ from spskit.vit1 import (
     build_vit1,
     decimal_partno,
     k17_attributes,
+    module_attributes,
     programming_data_request,
 )
 
@@ -135,7 +136,7 @@ def test_a_request_without_the_k17_read_is_refused():
             attributes=(),
         )
     radio = {**CONTROLLER, "deviceId": 128}
-    with pytest.raises(Vit1Error, match="device 40"):
+    with pytest.raises(Vit1Error, match="K17, K33, K20, or K9"):
         programming_data_request(
             client_state=CLIENT,
             sps_vin=SPS_VIN,
@@ -144,6 +145,81 @@ def test_a_request_without_the_k17_read_is_refused():
             option_composite=OPTIONS,
             attributes=k17_attributes(vin=VIN, parts=_parts(), ssecuhn="fixture-hw"),
         )
+
+
+def _controller(
+    code: str, device_id: int, request_method: int, part_addresses: str, *, read_cvn: int
+) -> dict[str, object]:
+    return {
+        "deviceId": device_id,
+        "displayName": {"controllerCode": code, "controllerLabel": code, "displayOrder": 0},
+        "requestMethod": {
+            "reqMethodID": request_method,
+            "deviceID": device_id,
+            "vinAddresses": "90",
+            "partAddresses": part_addresses,
+            "partLength": "4",
+            "partStartByte": "1",
+            "hardwareIdAddresses": "CC",
+            "readVIN": 1,
+            "readParts": 1,
+            "readHardwareId": 1,
+            "readCvn": read_cvn,
+            "readSecuritySeed": 1,
+        },
+        "secCodeRequired": True,
+    }
+
+
+def _body_for(controller: dict[str, object], attributes: tuple[tuple[str, str], ...]) -> dict[str, object]:
+    return programming_data_request(
+        client_state=CLIENT,
+        sps_vin=SPS_VIN,
+        method=METHOD,
+        controller=controller,
+        option_composite=OPTIONS,
+        attributes=attributes,
+    )
+
+
+def test_k33_k20_and_k9_reads_attach_as_vit1_blocks():
+    k33_parts = {did: _payload(index) for index, did in enumerate(PART_DIDS, start=1)}
+    k33 = _body_for(
+        _controller("K33", 153, 11231, ",".join(PART_DIDS), read_cvn=0),
+        module_attributes("K33", vin=VIN, parts=k33_parts, hardware=_payload(42)),
+    )
+    k33_attrs = k33["controller"]["vit1"]["cmbs"][0]["vitAttrs"]
+    assert k33["controller"]["deviceId"] == 153
+    assert k33["controller"]["requestMethod"]["reqMethodID"] == 11231
+    assert k33_attrs[0] == {"key": "ssecuhn", "value": "42"}
+    assert [item["value"] for item in k33_attrs if item["key"] == "partno"] == [str(index) for index in range(1, 11)]
+    assert "cvn_in_vit1" not in json.dumps(k33_attrs)
+
+    k9_dids = (*PART_DIDS, "41", "42", "43", "44", "45", "46", "47", "48", "49", "4A")
+    k9_parts = {did: _payload(index) for index, did in enumerate(k9_dids, start=1)}
+    k9 = _body_for(
+        _controller("K9", 64, 410, ",".join(k9_dids), read_cvn=0),
+        module_attributes("K9", vin=VIN, parts=k9_parts, hardware=_payload(7)),
+    )
+    k9_partnos = [item["value"] for item in k9["controller"]["vit1"]["cmbs"][0]["vitAttrs"] if item["key"] == "partno"]
+    assert k9["controller"]["requestMethod"]["reqMethodID"] == 410
+    assert k9_partnos == [str(index) for index in range(1, 21)]
+
+    k20 = _body_for(
+        _controller("K20", 17, 11229, ",".join(PART_DIDS), read_cvn=1),
+        module_attributes("K20", vin=VIN, parts=k33_parts, hardware=_payload(3), cvn="fixture-cvn"),
+    )
+    k20_attrs = k20["controller"]["vit1"]["cmbs"][0]["vitAttrs"]
+    assert k20["controller"]["deviceId"] == 17
+    assert k20_attrs[-1] == {"key": "cvn_in_vit1", "value": "fixture-cvn"}
+    encoded = json.dumps(k20)
+    assert all(part not in encoded for part in CATALOG_PARTS)
+    assert "0000A407" not in encoded
+
+    with pytest.raises(Vit1Error, match="cvn_in_vit1"):
+        module_attributes("K20", vin=VIN, parts=k33_parts, hardware=_payload(3))
+    with pytest.raises(Vit1Error, match="CVN stays off"):
+        module_attributes("K33", vin=VIN, parts=k33_parts, hardware=_payload(42), cvn="fixture-cvn")
 
 
 def test_security_access_attributes_stay_off_the_request():

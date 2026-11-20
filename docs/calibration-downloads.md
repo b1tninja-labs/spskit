@@ -66,11 +66,12 @@ response is a list of `ProgrammingDataUnit`. Each unit has a blob name, a blob s
 and a list of `DownloadServer`. A server is a `CALDownloadServer` (a URI, plus secured and Akamai
 flags) or a `DLSDownloadServer` (a URI, an Akamai flag, and a description).
 
-`vit1.programming_data_request()` builds that body for brake controller K17. A saved module read
+`vit1.programming_data_request()` builds that body for K17, K33, K20, and K9. A saved module read
 supplies the VIT1 control-module block on `controller`: `vin` from DID `$90`, one decimal `partno`
-per DID `$C1` through `$CA`, and `ssecuhn` from DID `$CC`. The traced post of this controller with
-no `vit1` is `D:\data\spskit\re\programming-data-k17.json`, `errorCode` `VIT_NO_VALID_CMB`. The
-function returns the body. A live post waits until a real read is on disk.
+per part DID, and `ssecuhn` from DID `$CC`. K33, K20, and K9 take the hardware id as 4 bytes from
+byte 1. K9's part list continues through `$4A`. K20 also carries `cvn_in_vit1` from the read. The
+traced post of K17 with no `vit1` is `D:\data\spskit\re\programming-data-k17.json`, `errorCode`
+`VIT_NO_VALID_CMB`. The function returns the body. A live post waits until a real read is on disk.
 
 ## Where the bytes go
 

@@ -73,13 +73,14 @@ One VIN the subscription can open. The rows are the controller tree and the cali
 
 ### Programming data
 
-The body of `POST /sps/legacy/cloud/getProgrammingData` for brake controller K17. A saved module
+The body of `POST /sps/legacy/cloud/getProgrammingData` for K17, K33, K20, and K9. A saved module
 read supplies the VIT1 control-module block. The function returns that body. A live post waits
 until a real read is on disk.
 
 | Id | Obligation | Spec | Status | Evidence |
 |---|---|---|---|---|
 | `sk.vit1.request` | `vit1.programming_data_request()` attaches a saved K17 module read as VIT1 control-module blocks on the controller | saved module read; the traced post with no vit1 is `VIT_NO_VALID_CMB` | `[ok]` | `tests/test_vit1.py::test_a_saved_k17_read_is_the_vit1_block_on_the_request` |
+| `sk.vit1.siblings` | `vit1.module_attributes()` pairs a saved read for K33, K20, and K9, and `vit1.programming_data_request()` attaches it | fixture request methods from the VIN catalog | `[ok]` | `tests/test_vit1.py::test_k33_k20_and_k9_reads_attach_as_vit1_blocks` |
 
 ### Not this slice
 

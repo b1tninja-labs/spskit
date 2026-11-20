@@ -16,10 +16,12 @@ own ACDelco TDS subscription is licensed for.
   leaves a file that is already there. `--refresh` fetches it again.
 - `spskit sps --vin` reads the SPS Info catalog for that one VIN and writes it to `SPS_DOWNLOAD_DIR/spsinfo.sqlite`.
   Running it again replaces that VIN. The file holds module names and part numbers.
-- `vit1.programming_data_request()` builds `POST /sps/legacy/cloud/getProgrammingData` for brake
-  controller K17 (device 40, request method 11228). A saved module read is attached as the VIT1
-  control-module block on the sequence: `vin` from DID `$90`, one decimal `partno` per DID `$C1`
-  through `$CA` (4 bytes from byte 1), and `ssecuhn` from DID `$CC`. The function returns the body.
+- `vit1.programming_data_request()` builds `POST /sps/legacy/cloud/getProgrammingData` for K17
+  (device 40, request method 11228), K33 (153, 11231), K20 (17, 11229), and K9 (64, 410). A saved
+  module read is attached as the VIT1 control-module block: `vin` from DID `$90`, one decimal
+  `partno` per part DID (4 bytes from byte 1), and `ssecuhn` from DID `$CC`. K33, K20, and K9 take
+  that hardware id as the same 4-byte decimal. K9 adds part DIDs `$41` through `$4A`. K20 also
+  carries `cvn_in_vit1` as the string from the read. The function returns the body.
 - `spskit login` posts the password and asks the host to email a code. It writes the challenge to the
   session file and does not write the code. `spskit code` reads that challenge, waits for the code, and
   writes the access token from the redirect. A dropped connection retries, and `spskit code` can be

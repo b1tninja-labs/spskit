@@ -1,4 +1,4 @@
-"""Programming-data request for brake controller K17.
+"""Programming-data request for K17, K33, K20, and K9.
 
 A saved module read is attribute pairs. Those pairs become the VIT1 control-module
 block on the controller. This module returns the request body. It does not post it.
@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 from spskit.spsinfo import SpsInfoError, check_vin
 
@@ -15,12 +16,35 @@ PROGRAMMING_DATA_PATH = "/sps/legacy/cloud/getProgrammingData"
 K17_DEVICE_ID = 40
 K17_REQUEST_METHOD = 11228
 PART_DIDS = ("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "CA")
+_PARTS_41_4A = ("41", "42", "43", "44", "45", "46", "47", "48", "49", "4A")
 PART_START = 1
 PART_LENGTH = 4
 
 _HEADER = frozenset({"sps_id", "chksum", "table_len", "nav_info", "reserved", "numcms", "devicetype", "spsmode"})
 _BLOCK_START = frozenset({"ssecuhn", "blocklen", "disp_type", "protocol", "ecu_adr"})
-_REFUSED = frozenset({"seed", "numseeds", "keycode", "msg_auth_sts", "cvn_in_vit1"})
+_SECURITY = frozenset({"seed", "numseeds", "keycode", "msg_auth_sts"})
+
+
+@dataclass(frozen=True, slots=True)
+class _ReadRule:
+    code: str
+    device_id: int
+    request_method: int
+    part_dids: tuple[str, ...]
+    hardware_decimal: bool
+    cvn: bool
+
+
+# Hardware length and start byte are 0 on K17, so ssecuhn stays the string from the read.
+# On K33, K20, and K9 they are 4 and 1, the same slice as a part number.
+# K20 sets readCvn and the request method names no CVN DID, so cvn_in_vit1 is that string.
+_RULES = (
+    _ReadRule("K17", K17_DEVICE_ID, K17_REQUEST_METHOD, PART_DIDS, False, False),
+    _ReadRule("K33", 153, 11231, PART_DIDS, True, False),
+    _ReadRule("K20", 17, 11229, PART_DIDS, True, True),
+    _ReadRule("K9", 64, 410, PART_DIDS + _PARTS_41_4A, True, False),
+)
+_BY_CODE = {rule.code: rule for rule in _RULES}
 
 
 class Vit1Error(ValueError):
@@ -47,12 +71,44 @@ def k17_attributes(*, vin: str, parts: Mapping[str, bytes], ssecuhn: str) -> tup
     Hardware length and start byte on this request method are both 0, so ssecuhn
     is the string from the read. The four-byte part slice is only for the part DIDs.
     """
+    return module_attributes("K17", vin=vin, parts=parts, hardware=ssecuhn)
+
+
+def module_attributes(
+    code: str,
+    *,
+    vin: str,
+    parts: Mapping[str, bytes],
+    hardware: bytes | str,
+    cvn: str | None = None,
+) -> tuple[tuple[str, str], ...]:
+    """Pair a saved read for K17, K33, K20, or K9.
+
+    Parts are 4 bytes from byte 1, printed in base 10, in request-method order.
+    K33, K20, and K9 store ``ssecuhn`` the same way. K17 keeps the hardware string.
+    K20's ``cvn_in_vit1`` is the string from the read. That request method names no CVN DID.
+    """
+    rule = _BY_CODE.get(code)
+    if rule is None:
+        raise Vit1Error("a module read is K17, K33, K20, or K9")
     checked = _vin(vin)
-    if not isinstance(ssecuhn, str) or ssecuhn == "":
-        raise Vit1Error("ssecuhn is the hardware id from DID CC")
-    if set(parts) != set(PART_DIDS):
-        raise Vit1Error("K17 needs one part payload for DID C1 through CA")
-    partnos = tuple(("partno", decimal_partno(parts[did])) for did in PART_DIDS)
+    if set(parts) != set(rule.part_dids):
+        raise Vit1Error(f"{rule.code} needs one part payload per part DID on its request method")
+    if rule.hardware_decimal:
+        if not isinstance(hardware, bytes | bytearray):
+            raise Vit1Error(f"{rule.code} hardware DID CC is 4 bytes from byte 1")
+        ssecuhn = decimal_partno(bytes(hardware))
+    else:
+        if not isinstance(hardware, str) or hardware == "":
+            raise Vit1Error("ssecuhn is the hardware id from DID CC")
+        ssecuhn = hardware
+    partnos = tuple(("partno", decimal_partno(parts[did])) for did in rule.part_dids)
+    if rule.cvn:
+        if not isinstance(cvn, str) or cvn == "":
+            raise Vit1Error("K20 stores cvn_in_vit1 from the module read")
+        return (("ssecuhn", ssecuhn), ("vin", checked), *partnos, ("cvn_in_vit1", cvn))
+    if cvn is not None:
+        raise Vit1Error("CVN stays off this request")
     return (("ssecuhn", ssecuhn), ("vin", checked), *partnos)
 
 
@@ -97,25 +153,28 @@ def programming_data_request(
     option_composite: Mapping[str, object],
     attributes: Sequence[tuple[str, str]],
 ) -> dict[str, object]:
-    """The body of POST /sps/legacy/cloud/getProgrammingData for K17.
+    """The body of POST /sps/legacy/cloud/getProgrammingData for K17, K33, K20, or K9.
 
     ``controller`` is the programming sequence. The saved read is attached as
     its ``vit1``. The caller supplies the catalog documents. This function does
     not read a VIN catalog, open a socket, or fill part numbers itself.
     """
-    if controller.get("deviceId") != K17_DEVICE_ID:
-        raise Vit1Error("this request is brake controller K17, device 40")
-    request_method = controller.get("requestMethod")
-    if not isinstance(request_method, Mapping) or request_method.get("reqMethodID") != K17_REQUEST_METHOD:
-        raise Vit1Error("K17 uses request method 11228")
+    rule = _rule_for(controller)
     if method.get("methodId") != 128:
         raise Vit1Error("this body is the getProgrammingData request, method 128")
     pairs = _pairs(attributes)
     names = [name for name, _ in pairs]
-    if names.count("vin") != 1 or names.count("ssecuhn") != 1 or names.count("partno") != 10:
-        raise Vit1Error("a K17 read is one vin, ten part numbers, and one ssecuhn")
-    if any(name in _REFUSED for name, _ in pairs):
-        raise Vit1Error("security access and CVN stay off this request")
+    cvn_count = 1 if rule.cvn else 0
+    if names.count("vin") != 1 or names.count("ssecuhn") != 1 or names.count("partno") != len(rule.part_dids):
+        if rule.code == "K17":
+            raise Vit1Error("a K17 read is one vin, ten part numbers, and one ssecuhn")
+        raise Vit1Error(f"a {rule.code} read does not match its request method")
+    if names.count("cvn_in_vit1") != cvn_count:
+        if rule.cvn:
+            raise Vit1Error("K20 stores one cvn_in_vit1 from the module read")
+        raise Vit1Error("CVN stays off this request")
+    if any(name in _SECURITY for name, _ in pairs):
+        raise Vit1Error("security access stays off this request")
     for name, value in pairs:
         if name == "vin":
             _vin(value)
@@ -123,6 +182,8 @@ def programming_data_request(
             raise Vit1Error("a partno is the decimal from 4 bytes of the part DID")
         elif name == "ssecuhn" and value == "":
             raise Vit1Error("ssecuhn is the hardware id from DID CC")
+        elif name == "cvn_in_vit1" and value == "":
+            raise Vit1Error("K20 stores cvn_in_vit1 from the module read")
         elif name == "controller_supported" and value == "0":
             raise Vit1Error("the module read says the controller is unsupported")
     vit1 = build_vit1(pairs)
@@ -142,6 +203,15 @@ def programming_data_request(
         "mcvm": None,
         "optionComposite": _document(option_composite, "optionComposite"),
     }
+
+
+def _rule_for(controller: Mapping[str, object]) -> _ReadRule:
+    request_method = controller.get("requestMethod")
+    method_id = request_method.get("reqMethodID") if isinstance(request_method, Mapping) else None
+    for rule in _RULES:
+        if controller.get("deviceId") == rule.device_id and method_id == rule.request_method:
+            return rule
+    raise Vit1Error("this body is getProgrammingData for K17, K33, K20, or K9")
 
 
 def _vin(vin: str) -> str:
