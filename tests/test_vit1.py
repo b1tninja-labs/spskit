@@ -10,6 +10,7 @@ from spskit.vit1 import (
     SELECTED_CONTROLLER_PATH,
     VCI_PROGRAMMING_DATA_PATH,
     Vit1Error,
+    after_programming_data,
     after_selected_controller,
     build_vit1,
     decimal_partno,
@@ -351,6 +352,23 @@ def test_one_selected_controller_replaces_the_root_and_drops_vit1():
     assert kept["vit1"]["cmbs"][0]["vitAttrs"][0]["value"] == "fixture-hw"
     with pytest.raises(Vit1Error, match="no controller"):
         after_selected_controller(current, (), composite_populated=False)
+
+
+def test_a_failed_programming_data_response_leaves_the_posted_root():
+    posted = {
+        **CONTROLLER,
+        "vit1": {"vitAttrs": [], "cmbs": [{"vitAttrs": [{"key": "ssecuhn", "value": "fixture-hw"}]}]},
+    }
+    failed = {"success": False, "errorCode": "VIT_NO_VALID_CMB", "controller": {"deviceId": 1}}
+    with pytest.raises(Vit1Error, match="VIT_NO_VALID_CMB"):
+        after_programming_data(failed)
+    assert posted["vit1"]["cmbs"][0]["vitAttrs"][0]["value"] == "fixture-hw"
+    with pytest.raises(Vit1Error, match="failed"):
+        after_programming_data({"success": False})
+    returned = {"deviceId": 40, "programmingData": {"id": 3}}
+    assert after_programming_data({"success": True, "controller": returned}) == returned
+    with pytest.raises(Vit1Error, match="no controller"):
+        after_programming_data({"success": True})
 
 
 def test_method_2_is_the_vci_body_and_does_not_invent_steps():

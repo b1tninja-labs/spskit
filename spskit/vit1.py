@@ -318,6 +318,26 @@ def after_selected_controller(
     return _document(current, "controller")
 
 
+def after_programming_data(response: Mapping[str, object]) -> dict[str, object]:
+    """The root after ``/getProgrammingData`` returns.
+
+    ``validateAndReturnResponse`` throws when ``success`` is not true, and
+    ``GetProgrammingDataTask`` sets the root only after that return. A failed
+    body, including ``VIT_NO_VALID_CMB``, raises here and the posted controller
+    stays. A success returns the response ``controller`` alone.
+    """
+    document = _document(response, "response")
+    if document.get("success") is not True:
+        code = document.get("errorCode")
+        if isinstance(code, str) and code:
+            raise Vit1Error(code)
+        raise Vit1Error("the programming-data response failed")
+    controller = document.get("controller")
+    if not isinstance(controller, dict):
+        raise Vit1Error("the programming-data response has no controller")
+    return _document(controller, "controller")
+
+
 def vci_programming_data_request(
     *,
     client_state: Mapping[str, object],

@@ -101,6 +101,11 @@ omitted. The function does not post.
 root and does not keep the read that was on the previous root. Several controllers and a
 populated option composite stop on the options screen.
 
+`GetProgrammingDataTask` sets the root only after `validateAndReturnResponse` returns.
+`after_programming_data()` raises when `success` is not true, so `VIT_NO_VALID_CMB` leaves
+the posted controller in place. A success returns the response `controller` and does not
+merge the previous root into it.
+
 ## Where the bytes go
 
 `CalDownloadService.downloadFiles` sums the blob sizes, then branches on the event rather than on
