@@ -107,38 +107,58 @@ type-4 event is `POST /getType4App`, and it is not this download.
 
 ## Vehicle software parts
 
-SPS3 asks for the files after it has the functional steps:
+Vehicle Wide Programming is a button on the SPS2 controller-selection screen. Pressing it writes a
+vehicle file and then starts `SPS3.exe`. The file is
 
-`POST {base.url}/sps/gspas/active/vehicles/ecus/functionalSteps/parts`
+`%USERPROFILE%\sps\vwp\{vin}\{eventId}\input\vehicleSupportedEcus.json`
 
-The body is a `VehicleModel`: the event and the vehicle, including the ECUs that were selected.
-`{base.url}` is the Techline session base, the same kind of value SPS2 reads from
-`ClientApplicationContext.getServerUrl()`. It is not compiled into the jar.
+SPS2 and SPS3 both root that tree at `user.home\sps`. The JSON is an `Sps3Vehicle`: the event (VIN,
+event id, type `SPS3_EVENT`, the programming mode, locale, country, dealer code), the selected
+tool's VCI connection name, the job card, the model year, `rpoContent` from the GSPAS VIN, the
+client version, an empty field-action number, the VESCOM flag, and one ECU per supported controller
+(`id`, `code`, `name`, `baseVehicleId`). SPS3 reads that file back as its vehicle. The functional-step
+call refuses a vehicle with no `rpoContent`.
+
+From there SPS3 does three HTTP calls, then the file GET. Each POST sends `Authorization: bearer`
+with the SPS3 session token. `{base.url}` is the Techline session base, the same kind of value SPS2
+reads from `ClientApplicationContext.getServerUrl()`. It is not compiled into the jar.
+
+1. `POST {base.url}/sps/gspas/active/vehicles/ecus/functionalSteps`. The body is `eventId`,
+   `rpoContent`, the ECU list, `vin`, `fieldActionNumber`, and `autoSubmitEligible`. The response
+   replaces the ECU list with functional steps. A step carries `pciSegmentId`, `asIsPartNumbers`,
+   `parts`, and `requestMethods`.
+2. A native read of the controllers runs between that call and the next one. It fills the as-is
+   part numbers. It does not download a file.
+3. `POST {base.url}/sps/gspas/active/vehicles/ecus/functionalSteps/parts`. The body is the vehicle
+   after the step above. This is the call SPS3 names "get programming data".
 
 Each part in that response carries `number`, `url`, `checkSum`, `size`, and `moduleId`. A part may
 also carry `manifestPart`, `signaturePart`, and `internalParts`. The operating-system slot in this
 VIN's catalog is part `23394159`. In SPS3 that number is its own part, with its own URL, beside the
 calibration part numbers. The parts response is what fills the URL. This call has not been sent, so
-the URL for `23394159` is not known yet.
+the URL for `23394159` is not known yet. The stored catalog has the part number and the label
+"Operating system". It does not have `rpoContent` or the part URL.
 
 Parts that already have a checksum, a number, a URL, and a size are downloaded. Missing any of
 those, the client skips the part. One token is requested per part that is not already in the cache:
 
 `POST {base.url}/cdn/files/gspas/credentials`
 
-The body is `{"numberOfTokens": N}`. The response is `{"tokens": [...]}`. The header map is the
-SPS3 session token from `AuthenticationService.getSps3Token`.
+The body is `{"numberOfTokens": N}`. The response is `{"tokens": [...]}`.
 
-The file GET is `{part.url}/{part.number}`. The token is sent as the `Cookie` header, not as
-`Authorization`. A follow-up request for a chunk adds a `Range` header. The joined file is checked
-against `checkSum` and written to `%USERPROFILE%\sps\spsCache\spsCacheInternal\{number}`. A file
-already there under that number is not fetched again.
+The file GET is `{part.url}/{part.number}`. The token is the `Cookie` header. The file is fetched in
+10,000,000-byte chunks, each with a `Range` header. The joined file is checked against `checkSum`
+and written to `%USERPROFILE%\sps\spsCache\spsCacheInternal\{number}`. A file already there under
+that number is not fetched again.
 
-After the package is on disk, the manifest is `{number}.mnf` and the signature is `{number}.smd`.
-`internalParts` are the files inside that package, looked up by part number. The native programming
-library (`spsvcs.dll` 7.2.11) keeps an application-software partition and a calibration partition as
-separate names in its error strings. The manifest is what says which internal part is which. This
-note stops at the file on disk. It does not describe writing either partition to a controller.
+A programming step (PCI segment 1) keeps that cache file as the part. Ethernet (13) and the two
+large-delta segments (2 and 5) take a second pass. A part whose `moduleId` is 0 is copied as itself.
+A part that has `internalParts` is unzipped. The manifest is `{number}.mnf`, the signature is
+`{number}.smd`, and each internal part is the file named by its part number. Those files are then
+gzipped into `%USERPROFILE%\sps\spsCache\spsCacheInternal\archive`. The native library
+(`spsvcs.dll` 7.2.11) names an application-software partition and a calibration partition in its
+error strings, and it checks that the software part in the manifest is in the part-number list.
+The manifest is what says which file is which. This note stops at the file on disk.
 
 `TechUpdate`, `ForceTechUpdate`, `TechResidentUpdate`, and `GetPossibleSWDLActions` are exports of
 that same DLL. In this build the `TechUpdate` export logs the call and returns without building a
