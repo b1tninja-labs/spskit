@@ -96,6 +96,11 @@ The field name is `vciVOList`. A null step list becomes `[]`, which is what the
 constructor stores. The documents in those lists are the caller's. A null `mcvm` is
 omitted. The function does not post.
 
+`SelectedControllerTask` posts that same programming-data body to `/getSelectedController`.
+`after_selected_controller()` is the non-GSPAS result. One controller becomes the next
+root and does not keep the read that was on the previous root. Several controllers and a
+populated option composite stop on the options screen.
+
 ## Where the bytes go
 
 `CalDownloadService.downloadFiles` sums the blob sizes, then branches on the event rather than on

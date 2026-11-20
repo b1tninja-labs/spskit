@@ -14,6 +14,7 @@ from spskit.spsinfo import SpsInfoError, check_vin
 
 PROGRAMMING_DATA_PATH = "/sps/legacy/cloud/getProgrammingData"
 VCI_PROGRAMMING_DATA_PATH = "/sps/legacy/cloud/getVciProgrammingData"
+SELECTED_CONTROLLER_PATH = "/sps/legacy/cloud/getSelectedController"
 K17_DEVICE_ID = 40
 K17_REQUEST_METHOD = 11228
 PART_DIDS = ("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "CA")
@@ -277,8 +278,9 @@ def programming_data_request(
     """The body of POST /sps/legacy/cloud/getProgrammingData for one saved read.
 
     ``controller`` is the programming sequence. The saved read is attached as
-    its ``vit1``. The caller supplies the catalog documents. This function does
-    not read a VIN catalog, open a socket, or fill part numbers itself.
+    its ``vit1``. The same body is what ``SelectedControllerTask`` posts to
+    ``/getSelectedController``. The caller supplies the catalog documents. This
+    function does not read a VIN catalog, open a socket, or fill part numbers.
     """
     if method.get("methodId") not in {1, 128}:
         raise Vit1Error("this body is the getProgrammingData request, method 1 or 128")
@@ -291,6 +293,29 @@ def programming_data_request(
         "controller": sequence,
         "optionComposite": _document(option_composite, "optionComposite"),
     }
+
+
+def after_selected_controller(
+    current: Mapping[str, object],
+    controllers: Sequence[Mapping[str, object]],
+    *,
+    composite_populated: bool,
+) -> dict[str, object] | None:
+    """The root after a non-GSPAS ``/getSelectedController`` response.
+
+    One controller replaces the root. That object is the response controller,
+    so a ``vit1`` on ``current`` is not copied onto it. More than one controller
+    and a populated option composite stops on the options screen, and this
+    returns ``None`` instead of a controller to post. More than one controller
+    and an empty composite keeps ``current`` and the post still runs.
+    """
+    if not controllers:
+        raise Vit1Error("the selected-controller response has no controller")
+    if len(controllers) > 1 and composite_populated:
+        return None
+    if len(controllers) == 1:
+        return _document(controllers[0], "controller")
+    return _document(current, "controller")
 
 
 def vci_programming_data_request(

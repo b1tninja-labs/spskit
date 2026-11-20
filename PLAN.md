@@ -29,7 +29,9 @@ own ACDelco TDS subscription is licensed for.
   A dongle send belongs to `vcxtoolkit`. The method-128 reads whose parts are a plain DID list
   and whose hardware is format 0, length 4, start 1 are paired. Method 1 posts that same
   body. Method 2 and method 256 use `vci_programming_data_request()`, which copies the
-  caller's step lists and does not invent one. K73's format-2 hardware is not paired,
+  caller's step lists and does not invent one. `after_selected_controller()` is the
+  one-controller replacement: the response controller becomes the root and the previous
+  `vit1` is not copied. K73's format-2 hardware is not paired,
   and neither is K16's `P;C0,C1,C2` part text.
 - `spskit login` posts the password and asks the host to email a code. It writes the challenge to the
   session file and does not write the code. `spskit code` reads that challenge, waits for the code, and

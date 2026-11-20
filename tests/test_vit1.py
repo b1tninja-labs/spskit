@@ -7,8 +7,10 @@ import pytest
 
 from spskit.vit1 import (
     PROGRAMMING_DATA_PATH,
+    SELECTED_CONTROLLER_PATH,
     VCI_PROGRAMMING_DATA_PATH,
     Vit1Error,
+    after_selected_controller,
     build_vit1,
     decimal_partno,
     format1_text,
@@ -331,6 +333,24 @@ def test_method_1_reads_use_the_same_programming_data_body():
         )
     with pytest.raises(Vit1Error, match="not a saved-read rule"):
         module_attributes("K16", vin=VIN, parts={}, hardware=None)
+
+
+def test_one_selected_controller_replaces_the_root_and_drops_vit1():
+    current = {
+        **CONTROLLER,
+        "vit1": {"vitAttrs": [], "cmbs": [{"vitAttrs": [{"key": "ssecuhn", "value": "fixture-hw"}]}]},
+    }
+    replacement = {"deviceId": 40, "requestMethod": {"reqMethodID": 11228}}
+    chosen = after_selected_controller(current, (replacement,), composite_populated=False)
+    assert SELECTED_CONTROLLER_PATH == "/sps/legacy/cloud/getSelectedController"
+    assert chosen == replacement
+    assert "vit1" not in chosen
+    other = {"deviceId": 17}
+    assert after_selected_controller(current, (replacement, other), composite_populated=True) is None
+    kept = after_selected_controller(current, (replacement, other), composite_populated=False)
+    assert kept["vit1"]["cmbs"][0]["vitAttrs"][0]["value"] == "fixture-hw"
+    with pytest.raises(Vit1Error, match="no controller"):
+        after_selected_controller(current, (), composite_populated=False)
 
 
 def test_method_2_is_the_vci_body_and_does_not_invent_steps():
