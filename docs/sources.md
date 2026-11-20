@@ -78,8 +78,9 @@ not written to that file.
 on `cdlPermission` is ignored.
 
 `POST /cdn/files/public/downloadCredentials` takes `downloadCredentials` of one object
-(`humanReadableName`, `versionNumber`, `cdlResourceType`, empty `url`, `tokenData`, `tokenType`,
-`headers`, `md5` and `filename`). The response fills `url`, `filename` and `headers` (a `Cookie`
+(`humanReadableName`, `versionNumber`, `cdlResourceType`, `tokenType` `TUM`, empty `url`,
+`tokenData` `{value, expirationTime}`, `headers`, `md5` and `filename`). An empty-string
+`tokenData` is refused by the gateway. The response fills `url`, `filename` and `headers` (a `Cookie`
 when the file needs one). The file is fetched from that https URL.
 
 The 2026-11-19 gateway captures returned 200 with no `Authorization` header and no `X-` request

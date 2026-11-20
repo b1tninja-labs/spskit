@@ -18,7 +18,8 @@ def test_the_request_starts_with_empty_token_fields():
     item = body["downloadCredentials"][0]
     assert item["humanReadableName"] == "Example module"
     assert item["url"] == ""
-    assert item["tokenData"] == ""
+    assert item["tokenType"] == "TUM"
+    assert item["tokenData"] == {"value": "", "expirationTime": -1}
     assert "password" not in item
 
 
