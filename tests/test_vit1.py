@@ -19,6 +19,7 @@ from spskit.vit1 import (
     k17_attributes,
     module_attributes,
     programming_data_request,
+    sequences_after_programming_data,
     vci_programming_data_request,
 )
 
@@ -369,6 +370,28 @@ def test_a_failed_programming_data_response_leaves_the_posted_root():
     assert after_programming_data({"success": True, "controller": returned}) == returned
     with pytest.raises(Vit1Error, match="no controller"):
         after_programming_data({"success": True})
+
+
+def test_a_sequence_without_programming_data_stops_before_a_security_screen():
+    data = {"id": 3, "listOfModules": []}
+    brake = {"deviceId": 40, "skipSameCalibration": False, "secCodeRequired": True, "programmingData": data}
+    found = sequences_after_programming_data(brake)
+    assert [item["deviceId"] for item in found] == [40]
+    assert found[0]["programmingData"] == data
+    with pytest.raises(Vit1Error, match="NO_CALIBRATIONS_SUPPORTED"):
+        sequences_after_programming_data({"deviceId": 40})
+    assert sequences_after_programming_data({"deviceId": 40, "skipSameCalibration": True}) == []
+    assert (
+        sequences_after_programming_data(
+            {"deviceId": 40, "mapOfControllers": {"child": {"deviceId": 17}}, "programmingData": None}
+        )
+        == []
+    )
+    child = {"deviceId": 17, "programmingData": data}
+    container = sequences_after_programming_data({"deviceId": 252, "mapOfControllers": {"K20": child}})
+    assert [item["deviceId"] for item in container] == [17]
+    with pytest.raises(Vit1Error, match="NO_CALIBRATIONS_SUPPORTED"):
+        sequences_after_programming_data({"deviceId": 252, "mapOfControllers": {"K20": {"deviceId": 17}}})
 
 
 def test_method_2_is_the_vci_body_and_does_not_invent_steps():

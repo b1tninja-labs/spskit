@@ -88,6 +88,7 @@ until a real read is on disk.
 | `sk.vit1.vci` | `vit1.vci_programming_data_request()` builds the method 2 and 256 body and copies the caller's step lists | ProgrammingDataVCIRequest | `[ok]` | `tests/test_vit1.py::test_method_2_is_the_vci_body_and_does_not_invent_steps` |
 | `sk.vit1.selected` | `vit1.after_selected_controller()` replaces the root with one response controller and does not copy vit1 | SelectedControllerTask and handleAfterSelectedControllerResponse | `[ok]` | `tests/test_vit1.py::test_one_selected_controller_replaces_the_root_and_drops_vit1` |
 | `sk.vit1.progdata` | `vit1.after_programming_data()` raises on a failed body and otherwise keeps only the response controller | GetProgrammingDataTask and validateAndReturnResponse | `[ok]` | `tests/test_vit1.py::test_a_failed_programming_data_response_leaves_the_posted_root` |
+| `sk.vit1.sequences` | `vit1.sequences_after_programming_data()` lists the sequences checked for programmingData and raises when one has none | buildPSList and handleNextScreenAfterProgrammingDataRetrieval | `[ok]` | `tests/test_vit1.py::test_a_sequence_without_programming_data_stops_before_a_security_screen` |
 | `sk.vit1.format12` | `vit1.format1_text()` and `vit1.format2_copy()` read the other two GMLAN formats | spsvcs FUN_10015d80 | `[ok]` | `tests/test_vit1.py::test_format1_is_two_characters_per_byte_and_format2_is_the_slice` |
 
 ### Not this slice

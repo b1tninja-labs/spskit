@@ -106,6 +106,11 @@ populated option composite stop on the options screen.
 the posted controller in place. A success returns the response `controller` and does not
 merge the previous root into it.
 
+`sequences_after_programming_data()` is the list that screen builds before it looks at a
+security code. Device 252 is a container. Any other device is a sequence when
+`mapOfControllers` is missing or empty and `skipSameCalibration` is not true. A sequence
+with no `programmingData` raises `NO_CALIBRATIONS_SUPPORTED`.
+
 ## Where the bytes go
 
 `CalDownloadService.downloadFiles` sums the blob sizes, then branches on the event rather than on

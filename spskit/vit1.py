@@ -338,6 +338,53 @@ def after_programming_data(response: Mapping[str, object]) -> dict[str, object]:
     return _document(controller, "controller")
 
 
+def sequences_after_programming_data(
+    controller: Mapping[str, object],
+) -> list[dict[str, object]]:
+    """The sequences checked for ``programmingData`` before a security screen.
+
+    Device 252 is a container. It is not itself a sequence, and each value of
+    ``mapOfControllers`` is walked. Any other device is one sequence when that
+    map is missing or empty and ``skipSameCalibration`` is not true. A missing
+    map is treated as empty: ``Util.isEmptyHashMap`` is not in the decompiled
+    sources, and the VIN catalog omits a null map. A sequence with no
+    ``programmingData`` raises ``NO_CALIBRATIONS_SUPPORTED``.
+    """
+    found = _programming_sequences(_document(controller, "controller"))
+    for sequence in found:
+        if sequence.get("programmingData") is None:
+            raise Vit1Error("NO_CALIBRATIONS_SUPPORTED")
+    return found
+
+
+def _programming_sequences(document: dict[str, object]) -> list[dict[str, object]]:
+    device = document.get("deviceId")
+    if type(device) is not int:
+        raise Vit1Error("controller deviceId is not an integer")
+    children = document.get("mapOfControllers")
+    if children is None:
+        empty = True
+    elif isinstance(children, dict):
+        empty = not children
+    else:
+        raise Vit1Error("mapOfControllers is not a map")
+    if device != 252:
+        skip = document.get("skipSameCalibration", False)
+        if not isinstance(skip, bool):
+            raise Vit1Error("skipSameCalibration is not a boolean")
+        if empty and not skip:
+            return [document]
+        return []
+    if empty or not isinstance(children, dict):
+        return []
+    found: list[dict[str, object]] = []
+    for child in children.values():
+        if not isinstance(child, dict):
+            raise Vit1Error("mapOfControllers value is not a controller")
+        found.extend(_programming_sequences(child))
+    return found
+
+
 def vci_programming_data_request(
     *,
     client_state: Mapping[str, object],
