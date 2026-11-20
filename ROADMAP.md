@@ -89,6 +89,7 @@ until a real read is on disk.
 | `sk.vit1.selected` | `vit1.after_selected_controller()` replaces the root with one response controller and does not copy vit1 | SelectedControllerTask and handleAfterSelectedControllerResponse | `[ok]` | `tests/test_vit1.py::test_one_selected_controller_replaces_the_root_and_drops_vit1` |
 | `sk.vit1.progdata` | `vit1.after_programming_data()` raises on a failed body and otherwise keeps only the response controller | GetProgrammingDataTask and validateAndReturnResponse | `[ok]` | `tests/test_vit1.py::test_a_failed_programming_data_response_leaves_the_posted_root` |
 | `sk.vit1.sequences` | `vit1.sequences_after_programming_data()` lists the sequences checked for programmingData and raises when one has none | buildPSList and handleNextScreenAfterProgrammingDataRetrieval | `[ok]` | `tests/test_vit1.py::test_a_sequence_without_programming_data_stops_before_a_security_screen` |
+| `sk.vit1.modules` | `vit1.normal_programming_data_loop()` raises for unauthored id 10 and for an empty module list that still has a partno | handleNormalAfterProgrammingData | `[ok]` | `tests/test_vit1.py::test_an_empty_module_list_with_a_partno_stops_before_a_security_screen` |
 | `sk.vit1.format12` | `vit1.format1_text()` and `vit1.format2_copy()` read the other two GMLAN formats | spsvcs FUN_10015d80 | `[ok]` | `tests/test_vit1.py::test_format1_is_two_characters_per_byte_and_format2_is_the_slice` |
 
 ### Not this slice

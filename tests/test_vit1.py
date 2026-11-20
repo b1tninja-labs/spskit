@@ -18,6 +18,7 @@ from spskit.vit1 import (
     format2_copy,
     k17_attributes,
     module_attributes,
+    normal_programming_data_loop,
     programming_data_request,
     sequences_after_programming_data,
     vci_programming_data_request,
@@ -392,6 +393,41 @@ def test_a_sequence_without_programming_data_stops_before_a_security_screen():
     assert [item["deviceId"] for item in container] == [17]
     with pytest.raises(Vit1Error, match="NO_CALIBRATIONS_SUPPORTED"):
         sequences_after_programming_data({"deviceId": 252, "mapOfControllers": {"K20": {"deviceId": 17}}})
+
+
+def test_an_empty_module_list_with_a_partno_stops_before_a_security_screen():
+    data = {"id": 3, "listOfModules": []}
+    block = {"vitAttrs": [{"key": "partno", "value": "100"}, {"key": "keycode", "value": "unread"}]}
+    sequence = {"deviceId": 40, "programmingData": data, "vit1": {"vitAttrs": [], "cmbs": [block]}}
+    root = {"deviceId": 40, "preProgrammingInstructions": []}
+    with pytest.raises(Vit1Error, match="No modules found"):
+        normal_programming_data_loop((sequence,), root=root)
+    noted = {"deviceId": 40, "preProgrammingInstructions": ["setup is required"]}
+    normal_programming_data_loop((sequence,), root=noted)
+    normal_programming_data_loop((sequence,), root=root, current=noted)
+    vin_only = {"vitAttrs": [], "cmbs": [{"vitAttrs": [{"key": "vin", "value": "1"}]}]}
+    normal_programming_data_loop(
+        ({"deviceId": 40, "programmingData": data, "vit1": vin_only},),
+        root=root,
+    )
+    normal_programming_data_loop(
+        ({"deviceId": 40, "programmingData": data, "vit1": {"vitAttrs": [], "cmbs": [None]}},),
+        root=root,
+    )
+    with pytest.raises(Vit1Error, match="null vit1"):
+        normal_programming_data_loop(
+            ({"deviceId": 40, "programmingData": data},),
+            root=noted,
+        )
+    type4 = {"deviceId": 253, "programmingData": data}
+    with pytest.raises(Vit1Error, match="No modules found"):
+        normal_programming_data_loop((type4,), root=root)
+    unauthored = {"deviceId": 40, "programmingData": {"id": 10, "listOfModules": [{"name": "blob"}]}, "vit1": vin_only}
+    with pytest.raises(Vit1Error, match="not authored"):
+        normal_programming_data_loop((unauthored,), root=root)
+    normal_programming_data_loop((unauthored,), root=noted)
+    held = {**sequence, "mcvmProgramming": {"caller": "step"}}
+    normal_programming_data_loop((held,), root=root)
 
 
 def test_method_2_is_the_vci_body_and_does_not_invent_steps():

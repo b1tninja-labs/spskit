@@ -111,6 +111,13 @@ security code. Device 252 is a container. Any other device is a sequence when
 `mapOfControllers` is missing or empty and `skipSameCalibration` is not true. A sequence
 with no `programmingData` raises `NO_CALIBRATIONS_SUPPORTED`.
 
+`normal_programming_data_loop()` is the next loop, still before a security screen. A null
+`vit1` on a device other than 253 is read before that loop's throws, and this function does
+not read `keycode`. Pre-programming instructions suppress the throws. Programming data
+whose `id` is 10 raises the unauthored-data error. An empty `listOfModules` raises when the
+first control-module block is missing or has a `partno`. A first block with no `partno` does
+not.
+
 ## Where the bytes go
 
 `CalDownloadService.downloadFiles` sums the blob sizes, then branches on the event rather than on

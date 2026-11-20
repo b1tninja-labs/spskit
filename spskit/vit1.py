@@ -357,6 +357,89 @@ def sequences_after_programming_data(
     return found
 
 
+def normal_programming_data_loop(
+    sequences: Sequence[Mapping[str, object]],
+    *,
+    root: Mapping[str, object],
+    current: Mapping[str, object] | None = None,
+) -> None:
+    """The loop in ``handleNormalAfterProgrammingData`` before any security screen.
+
+    A null ``vit1`` on a device other than 253 is read before the later tests, so
+    this raises and does not read ``keycode``. Pre-programming instructions on the
+    root or the current sequence suppress the two throws below. Programming data
+    whose ``id`` is 10 raises the unauthored-data error. An empty ``listOfModules``
+    raises ``No modules found in programming data`` when there is no
+    ``mcvmProgramming`` and the first control-module block is missing or carries a
+    ``partno``. A first block with no ``partno`` does not raise. ``isEmptyCollection``
+    is not in the decompiled sources; a null or empty list is empty.
+    """
+    root_document = _document(root, "controller")
+    current_document = None if current is None else _document(current, "controller")
+    suppressed = _has_pre_programming_instructions(root_document) or (
+        current_document is not None and _has_pre_programming_instructions(current_document)
+    )
+    for sequence in sequences:
+        document = _document(sequence, "controller")
+        if document.get("vit1") is None and document.get("deviceId") != 253:
+            raise Vit1Error("a null vit1 is read before the module test")
+        if suppressed:
+            continue
+        data = document.get("programmingData")
+        if isinstance(data, dict) and type(data.get("id")) is int and data.get("id") == 10:
+            raise Vit1Error("VCI id of 10 indicates that the data is not authored, and is only for testing purposes")
+        if document.get("mcvmProgramming") is not None or not isinstance(data, dict):
+            continue
+        if not _modules_empty(data) or not _empty_modules_are_unsupported(document.get("vit1")):
+            continue
+        raise Vit1Error("No modules found in programming data")
+
+
+def _has_pre_programming_instructions(document: dict[str, object]) -> bool:
+    raw = document.get("preProgrammingInstructions")
+    if raw is None:
+        return False
+    if not isinstance(raw, list):
+        raise Vit1Error("preProgrammingInstructions is not a list")
+    return bool(raw)
+
+
+def _modules_empty(data: dict[str, object]) -> bool:
+    modules = data.get("listOfModules")
+    if modules is None:
+        return True
+    if not isinstance(modules, list):
+        raise Vit1Error("listOfModules is not a list")
+    return not modules
+
+
+def _empty_modules_are_unsupported(vit1: object) -> bool:
+    """The control-module half of the empty-module condition."""
+    if vit1 is None:
+        return True
+    if not isinstance(vit1, dict):
+        raise Vit1Error("vit1 is not a document")
+    blocks = vit1.get("cmbs")
+    if not isinstance(blocks, list):
+        raise Vit1Error("vit1 cmbs is not a list")
+    if not blocks:
+        return True
+    if blocks[0] is None:
+        return False
+    first = blocks[0]
+    if not isinstance(first, dict):
+        raise Vit1Error("control module block is not a document")
+    pairs = first.get("vitAttrs")
+    if not isinstance(pairs, list):
+        raise Vit1Error("vitAttrs is not a list")
+    for pair in pairs:
+        if not isinstance(pair, dict):
+            raise Vit1Error("vit attribute is not a pair")
+        if pair.get("key") == "partno":
+            return True
+    return False
+
+
 def _programming_sequences(document: dict[str, object]) -> list[dict[str, object]]:
     device = document.get("deviceId")
     if type(device) is not int:
