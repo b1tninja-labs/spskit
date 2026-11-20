@@ -67,7 +67,9 @@ available afterward, so that post does not store the VIN.
 `GET /oauth/user/token/child?tokenType=tum2` with `Authorization: Bearer` and
 `BROWSER_ACCESS_TOKEN` returned both wrappers, `accessToken.tokenValue` and
 `refreshToken.tokenValue`. The same bearer accepted
-`GET /spsinfo/vin/fixture/{vin}` for the subscription VIN. The catalog was not written:
-the EEID session then returned 401, and `spskit sps` takes the SPS Info cookie rather
+`GET /spsinfo/vin/fixture/{vin}` for the subscription VIN. That document is the SPS Info
+catalog, stored apart from the licensed-download list. `spskit sps` had already written
+it to `spsinfo.sqlite` for this VIN. The EEID session then returned 401, so the later
+fixture was not fetched again, and `spskit sps` still takes the SPS Info cookie rather
 than this browser token. `GET /api/v1/subscriptions/access/{id}` for the product, with no
 slot id, is a different call and returned SPOREF code 1003.
