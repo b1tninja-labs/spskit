@@ -281,6 +281,56 @@ def test_the_other_method_128_reads_attach():
         _body_for(missing, (("ssecuhn", "1"), ("partno", "1")))
 
 
+def test_method_1_reads_use_the_same_programming_data_body():
+    normal = {"methodId": 1, "description": "Normal", "blockSameCal": False}
+    rows = (
+        ("K124", 108, 396, (*PART_DIDS, "60", "62", "64", "66", "68", "6A"), "CB", ""),
+        ("K74", 143, 579, ("C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "CA", "71"), "C1", ""),
+        ("K114B", 203, 529, ("C1", "C2"), None, VIN),
+        ("K36", 88, 421, ("C1", "C2", "C3"), "C1", VIN),
+    )
+    for code, device, request_method, dids, hardware_did, vin in rows:
+        parts = {did: _payload(index) for index, did in enumerate(dids, start=1)}
+        hardware = None if hardware_did is None else parts.get(hardware_did, _payload(9))
+        attributes = module_attributes(code, vin=vin, parts=parts, hardware=hardware)
+        body = programming_data_request(
+            client_state=CLIENT,
+            sps_vin=SPS_VIN,
+            method=normal,
+            controller=_controller(code, device, request_method, ",".join(dids), read_cvn=0),
+            option_composite=OPTIONS,
+            attributes=attributes,
+        )
+        assert body["method"]["methodId"] == 1
+        assert body["controller"]["deviceId"] == device
+        attrs = body["controller"]["vit1"]["cmbs"][0]["vitAttrs"]
+        assert [item["key"] for item in attrs].count("partno") == len(dids)
+    vci = {"methodId": 2, "description": "VCI", "blockSameCal": False}
+    with pytest.raises(Vit1Error, match="method 1 or 128"):
+        programming_data_request(
+            client_state=CLIENT,
+            sps_vin=SPS_VIN,
+            method=vci,
+            controller=_controller("K36", 88, 421, "C1,C2,C3", read_cvn=0),
+            option_composite=OPTIONS,
+            attributes=module_attributes(
+                "K36",
+                vin=VIN,
+                parts={"C1": _payload(1), "C2": _payload(2), "C3": _payload(3)},
+                hardware=_payload(1),
+            ),
+        )
+    with pytest.raises(Vit1Error, match="that part's read"):
+        module_attributes(
+            "K36",
+            vin=VIN,
+            parts={"C1": _payload(1), "C2": _payload(2), "C3": _payload(3)},
+            hardware=_payload(4),
+        )
+    with pytest.raises(Vit1Error, match="not a saved-read rule"):
+        module_attributes("K16", vin=VIN, parts={}, hardware=None)
+
+
 def test_format1_is_two_characters_per_byte_and_format2_is_the_slice():
     response = bytes([0x00, 0x00, 0x5A, 0x81, 0x2A, 0x00, 0x01])
     assert format1_text(response, 1, 1) == "2:"

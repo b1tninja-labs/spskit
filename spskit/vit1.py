@@ -89,6 +89,10 @@ _RULES = (
     _rule("K118", 156, 530, _C1_C2, hardware_did=None),
     _rule("P16", 96, 11242, _P16_PARTS, hardware_did="CB", read_vin=True),
     _rule("K73", 151, 601, (), hardware_did="CB", read_vin=True),
+    _rule("K124", 108, 396, (*PART_DIDS, "60", "62", "64", "66", "68", "6A"), hardware_did="CB"),
+    _rule("K74", 143, 579, ("C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "CA", "71"), hardware_did="C1"),
+    _rule("K114B", 203, 529, _C1_C2, hardware_did=None, read_vin=True),
+    _rule("K36", 88, 421, _C1_C3, hardware_did="C1", read_vin=True),
 )
 _BY_CODE = {rule.code: rule for rule in _RULES}
 
@@ -190,7 +194,7 @@ def module_attributes(
     cvn: str | None = None,
     partnums: Sequence[str] = (),
 ) -> tuple[tuple[str, str], ...]:
-    """Pair a saved read for one method-128 request method on this VIN.
+    """Pair a saved read for one Normal request method on this VIN.
 
     Parts are 4 bytes from byte 1, printed in base 10, in request-method order.
     A hardware DID of format 0, length 4, start 1 is that same decimal. K17
@@ -219,6 +223,10 @@ def module_attributes(
         raise Vit1Error(f"{rule.code} does not read a VIN")
     if set(parts) != set(rule.part_dids):
         raise Vit1Error(f"{rule.code} needs one part payload per part DID on its request method")
+    if rule.hardware_decimal and rule.hardware_did in rule.part_dids:
+        same = decimal_partno(parts[rule.hardware_did])
+        if pairs[0] != ("ssecuhn", same):
+            raise Vit1Error(f"{rule.code} hardware DID {rule.hardware_did} is that part's read")
     pairs.extend(("partno", decimal_partno(parts[did])) for did in rule.part_dids)
     pairs.extend(_cvn_tail(rule, cvn, partnums))
     return tuple(pairs)
@@ -272,8 +280,8 @@ def programming_data_request(
     not read a VIN catalog, open a socket, or fill part numbers itself.
     """
     rule = _rule_for(controller)
-    if method.get("methodId") != 128:
-        raise Vit1Error("this body is the getProgrammingData request, method 128")
+    if method.get("methodId") not in {1, 128}:
+        raise Vit1Error("this body is the getProgrammingData request, method 1 or 128")
     pairs = _pairs(attributes)
     names = [name for name, _ in pairs]
     cvn_count = 1 if rule.cvn else 0

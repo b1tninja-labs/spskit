@@ -83,6 +83,13 @@ has a VIN and DID `$CB` and no parts. K73 request methods 520 and 566 stay off: 
 hardware format is 2. `format2_copy()` returns those bytes and does not turn them into
 `ssecuhn`.
 
+Method 1 (`NORMAL`) reaches the same `GetProgrammingDataTask` as method 128. The body is the
+same request. Method 2 (`VCI`) does not: `isProgrammingByVCI` sends that sequence to
+`/getVciProgrammingData`. K124, K74, K114B, and K36 are method 1. Their part lists are plain
+DIDs at format 0, length 4, start 1, so the builder pairs them. K36's hardware DID is `$C1`,
+the same read as its first part. K16 stays off: `partAddresses` is `P;C0,C1,C2` and the part
+length is 0.
+
 ## Where the bytes go
 
 `CalDownloadService.downloadFiles` sums the blob sizes, then branches on the event rather than on
