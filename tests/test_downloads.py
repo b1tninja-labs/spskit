@@ -55,6 +55,7 @@ def test_a_disabled_version_is_left_out():
     found = parse_permissions(payload)
     assert [module.version for module in found] == ["26.8.31.0"]
     assert parse_prelaunch(PRELAUNCH) == ["7"]
+    assert parse_prelaunch({"resultList": [{"id": 7}, {"id": 8, "disabled": True}, {"id": "page"}]}) == ["7"]
 
 
 def test_resource_access_drops_the_account_id():

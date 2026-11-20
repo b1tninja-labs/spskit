@@ -123,8 +123,9 @@ The download button does not use that list for the installer. It always reads
 `GET /acl/cdl/resources/25/permissions` and posts the first `resourceVersion` to `downloadCredentials`.
 Resource 25 is `TLC Installer`, type `INITIAL_SOFTWARE`, and the grant's filename is `TLCSuite.exe`.
 `spskit downloads` unions four lists: resource 25, resource 1, every runnable decimal id from
-`POST /acl/permissions/search`, every decimal id from `GET /acl/cdl/resources/prelaunch`, and every
-version from `GET /acl/cdl/permissions/search`. A UUID is still a page. A version with `disabled`
+`POST /acl/permissions/search`, every decimal id from `GET /acl/cdl/resources/prelaunch`
+(`resultList`, or `cdlResources` on the update-manager model), and every version from
+`GET /acl/cdl/permissions/search`. A UUID is still a page. A version with `disabled`
 true is omitted. `spskit downloads --get` writes each version under
 `SPS_DOWNLOAD_DIR/cache/{id}/{version}/`. A file already in that directory is left in place.
 `spskit downloads --get --refresh` fetches it again.

@@ -471,21 +471,26 @@ def request_sps_form(settings: Settings, exchange: Exchange) -> SporefForm:
         raise SessionExpiredError("there is no saved session")
     origin = _site_origin(settings)
     apim = _apim_token(settings, exchange)
-    status, raw = exchange(
-        "GET",
-        f"{settings.backend}/api/v1/spsCallibration/accessSPSCal",
-        None,
-        {
-            "Authorization": f"Bearer {apim}",
-            "X-EEID-Access-Token": settings.access_token,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Origin": origin,
-            "Referer": origin + "/",
-        },
-    )
-    if status != 200:
-        raise SessionExpiredError(f"SPS Info was refused ({status}; {_backend_error(raw)})")
-    return parse_sporef_form(raw)
+    headers = {
+        "Authorization": f"Bearer {apim}",
+        "X-EEID-Access-Token": settings.access_token,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Origin": origin,
+        "Referer": origin + "/",
+    }
+    status, raw = 500, b""
+    for _attempt in range(3):
+        status, raw = exchange(
+            "GET",
+            f"{settings.backend}/api/v1/spsCallibration/accessSPSCal",
+            None,
+            headers,
+        )
+        if status == 200:
+            return parse_sporef_form(raw)
+        if status != 500:
+            break
+    raise SessionExpiredError(f"SPS Info was refused ({status}; {_backend_error(raw)})")
 
 
 def open_gateway_session(settings: Settings, exchange: Exchange) -> None:

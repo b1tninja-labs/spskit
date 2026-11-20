@@ -93,9 +93,25 @@ def download_ids(access: list[ResourceAccess]) -> list[str]:
     return chosen
 
 
+def _decimal_id(value: object) -> str | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value >= 0:
+        return str(value)
+    if isinstance(value, str) and value.isdigit():
+        return value
+    return None
+
+
 def parse_prelaunch(payload: Mapping[str, object]) -> list[str]:
-    """Decimal ids from GET /acl/cdl/resources/prelaunch. A disabled row is left out."""
+    """Decimal ids from GET /acl/cdl/resources/prelaunch. A disabled row is left out.
+
+    The live catalog returns ``resultList``. The update-manager model names the same list
+    ``cdlResources``.
+    """
     items = payload.get("cdlResources")
+    if not isinstance(items, list):
+        items = payload.get("resultList")
     if not isinstance(items, list):
         raise CatalogError("cdlResources is missing")
     found: list[str] = []
@@ -104,10 +120,10 @@ def parse_prelaunch(payload: Mapping[str, object]) -> list[str]:
             raise CatalogError("a prelaunch resource is not an object")
         if item.get("disabled") is True:
             continue
-        identity = item.get("id")
+        identity = _decimal_id(item.get("id"))
         if identity is None:
-            identity = item.get("cdlResourceId")
-        if isinstance(identity, str) and identity.isdigit() and identity not in found:
+            identity = _decimal_id(item.get("cdlResourceId"))
+        if identity is not None and identity not in found:
             found.append(identity)
     return found
 

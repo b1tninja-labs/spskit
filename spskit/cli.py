@@ -502,10 +502,18 @@ def run(
         if args.command == "downloads":
             found = licensed_downloads(settings, exchange, bearer)
             if args.fetch:
+                failed = 0
                 for module in found:
-                    path, cached = store_licensed(settings, module, exchange, bearer, refresh=args.refresh)
+                    try:
+                        path, cached = store_licensed(settings, module, exchange, bearer, refresh=args.refresh)
+                    except SessionExpiredError:
+                        raise
+                    except ValueError as exc:
+                        failed += 1
+                        print(f"skipped {module.resource_id} {module.version}: {exc}", file=sys.stderr)
+                        continue
                     print(f"{'cached' if cached else 'wrote'} {path}")
-                return 0
+                return 1 if failed else 0
             for module in found:
                 print(format_module(module))
             return 0
