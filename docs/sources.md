@@ -133,6 +133,15 @@ true is omitted. `spskit downloads --get` writes each version under
 `*.stor.lb.akamai.net` is reported and not followed. That name is Akamai NetStorage, and public DNS
 has no address for it. Download Delivery caches the 302, so another request to the same edge repeats it.
 
+The launcher script `tlc-web/static/js/main.c202f1fe.js` posts that same public body and passes the
+returned `url` and `filename` to FileSaver `saveAs`. FileSaver checks the URL with a HEAD and then
+downloads it. It does not call NetStorage. TUM's `DownloadFileService` opens the grant URL with
+`URLConnection`, reads `Content-Length`, and requests `Range: bytes=` in 5000000-byte chunks. A live
+public grant for TUM2 is `https://tlc-cdn.gm.com/cache-downloads/public/Prod/TUM2/26.8.28.0.zip`
+with a `Cookie` and no query. `GET /oauth/user/token/child` is a separate call: the SPOREF cookies
+alone are 401, and the SPS-INFO bearer is `UTS113`. TUM's `POST /cdn/files/downloadCredentials`
+answers 403 for this session. The download this login can make is the public grant URL.
+
 ## Techline Connect launch
 
 The TDS page does not start `TLCSuite.exe`. An access click calls
