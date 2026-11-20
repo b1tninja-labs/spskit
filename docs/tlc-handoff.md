@@ -57,11 +57,17 @@ handoff is `GET /api/v1/spsCallibration/accessSPSCal`, then
 `Authorization: Bearer`. `GET /oauth/user/token/child` does not: the SPOREF cookies alone
 are 401, and the SPS Info bearer is `UTS113`.
 
-The TDS app opens a vehicle through `GET /api/v1/subscriptions/vin/access/{slot}` or
-`GET /api/v1/subscriptions/access/{id}`. The captured vehicle form uses `appParm` `techpd`.
-That is the handoff that has to leave the browser tokens the launcher reads. A live
-`GET /api/v1/subscriptions` for this account returned one product, Service Programming
-System (SPS2) VIN, and `GET /api/v1/subscriptions/vin` returned no slots. Calling
-`/subscriptions/access/{id}` for that product returned SPOREF code 1003
-(`Exception while sending request to SPOREF`), so the `techpd` form and the cookie names
-on its response were not observed. The next step is that form, once a VIN occupies a slot.
+The TDS app's Add VIN button calls `GET /api/v1/subscriptions/vin/access/{nextAvailableId}`
+even when `slots` is empty. For this account that call returned the SPOREF form with
+`appParm` `techpd`, `portal_ID` `ACDelco` and `group` `OMUSER,na_SPS2`. The form has no VIN
+field. Posting it returned the Techline Connect page and set `BROWSER_ACCESS_TOKEN` and
+`BROWSER_REFRESH_TOKEN`. `GET /api/v1/subscriptions/vin` still showed no slots and one
+available afterward, so that post does not store the VIN.
+
+`GET /oauth/user/token/child?tokenType=tum2` with `Authorization: Bearer` and
+`BROWSER_ACCESS_TOKEN` returned both wrappers, `accessToken.tokenValue` and
+`refreshToken.tokenValue`. The same bearer accepted
+`GET /spsinfo/vin/fixture/{vin}` for the subscription VIN. The catalog was not written:
+the EEID session then returned 401, and `spskit sps` takes the SPS Info cookie rather
+than this browser token. `GET /api/v1/subscriptions/access/{id}` for the product, with no
+slot id, is a different call and returned SPOREF code 1003.
