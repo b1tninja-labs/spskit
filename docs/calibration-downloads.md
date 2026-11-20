@@ -76,6 +76,13 @@ programming-data writer is Gson, so the VIN and the option composite use `type`.
 of K17 with no `vit1` is `D:\data\spskit\re\programming-data-k17.json`, `errorCode`
 `VIT_NO_VALID_CMB`. The function returns the body. A live post waits until a real read is on disk.
 
+The same builder also pairs the other method-128 reads on this VIN whose part list is plain
+DIDs and whose hardware, when read, is format 0, length 4, start 1. VIN and hardware are
+omitted when that request method does not read them. K73's WiFi row (request method 601)
+has a VIN and DID `$CB` and no parts. K73 request methods 520 and 566 stay off: their
+hardware format is 2. `format2_copy()` returns those bytes and does not turn them into
+`ssecuhn`.
+
 ## Where the bytes go
 
 `CalDownloadService.downloadFiles` sums the blob sizes, then branches on the event rather than on

@@ -10,6 +10,8 @@ from spskit.vit1 import (
     Vit1Error,
     build_vit1,
     decimal_partno,
+    format1_text,
+    format2_copy,
     k17_attributes,
     module_attributes,
     programming_data_request,
@@ -140,7 +142,7 @@ def test_a_request_without_the_k17_read_is_refused():
             attributes=(),
         )
     radio = {**CONTROLLER, "deviceId": 128}
-    with pytest.raises(Vit1Error, match="K17, K33, K20, or K9"):
+    with pytest.raises(Vit1Error, match="not a saved-read rule"):
         programming_data_request(
             client_state=CLIENT,
             sps_vin=SPS_VIN,
@@ -228,6 +230,61 @@ def test_k33_k20_and_k9_reads_attach_as_vit1_blocks():
         module_attributes("K20", vin=VIN, parts=k33_parts, hardware=_payload(3), cvn="fixture-cvn")
     with pytest.raises(Vit1Error, match="CVN stays off"):
         module_attributes("K33", vin=VIN, parts=k33_parts, hardware=_payload(42), cvn="1", partnums=("cell-15",))
+
+
+def test_the_other_method_128_reads_attach():
+    rows = (
+        ("A22", 102, 446, ("C1",), "CB", False, ""),
+        ("A11", 128, 432, ("C1", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "CA", "73"), "CB", False, ""),
+        ("B218R", 91, 11243, PART_DIDS, "CB", False, ""),
+        ("B218L", 185, 11239, PART_DIDS, "CB", False, ""),
+        ("B233B", 210, 388, ("C1", "C2"), "CB", False, ""),
+        ("K43", 49, 417, ("C1", "C2", "C3"), "CB", False, ""),
+        ("K84", 175, 427, ("C1", "C2", "C3"), "CB", False, ""),
+        ("T3", 129, 434, ("C1", "CA"), "CB", False, ""),
+        ("K182", 187, 423, ("C1", "C2"), "CB", False, ""),
+        ("K109", 188, 428, ("C1", "C2"), "CB", False, ""),
+        ("K177", 43, 416, ("C1", "C2"), "CC", False, ""),
+        ("K107A", 29, 531, ("C1", "C2", "C3"), "CB", True, ""),
+        ("K107B", 30, 532, ("C1", "C2", "C3"), "CC", True, ""),
+        ("K118", 156, 530, ("C1", "C2"), None, False, ""),
+        ("P16", 96, 11242, (*PART_DIDS, "40", "42", "44", "67", "69", "71", "74", "76"), "CB", False, VIN),
+        ("K73", 151, 601, (), "CB", False, VIN),
+    )
+    for code, device, method, dids, hardware_did, cvn, vin in rows:
+        parts = {did: _payload(index) for index, did in enumerate(dids, start=1)}
+        hardware = None if hardware_did is None else _payload(9)
+        attributes = module_attributes(code, vin=vin, parts=parts, hardware=hardware, cvn="0" if cvn else None)
+        body = _body_for(_controller(code, device, method, ",".join(dids), read_cvn=int(cvn)), attributes)
+        attrs = body["controller"]["vit1"]["cmbs"][0]["vitAttrs"]
+        names = [item["key"] for item in attrs]
+        assert body["controller"]["deviceId"] == device
+        assert body["controller"]["requestMethod"]["reqMethodID"] == method
+        assert names.count("partno") == len(dids)
+        assert ("ssecuhn" in names) is (hardware_did is not None)
+        assert ("vin" in names) is (vin != "")
+        assert ("cvn_in_vit1" in names) is cvn
+        assert all(part not in json.dumps(body) for part in CATALOG_PARTS)
+    flagged = module_attributes(
+        "K107A",
+        vin="",
+        parts={did: _payload(index) for index, did in enumerate(("C1", "C2", "C3"), start=1)},
+        hardware=_payload(9),
+        cvn="1",
+        partnums=("cell-4",),
+    )
+    assert flagged[-1] == ("cvn_in_vit1", "1")
+    with pytest.raises(Vit1Error, match="does not read a VIN"):
+        module_attributes("A22", vin=VIN, parts={"C1": _payload(1)}, hardware=_payload(9))
+    missing = _controller("K73", 151, 520, "C7", read_cvn=0)
+    with pytest.raises(Vit1Error, match="not a saved-read rule"):
+        _body_for(missing, (("ssecuhn", "1"), ("partno", "1")))
+
+
+def test_format1_is_two_characters_per_byte_and_format2_is_the_slice():
+    response = bytes([0x00, 0x00, 0x5A, 0x81, 0x2A, 0x00, 0x01])
+    assert format1_text(response, 1, 1) == "2:"
+    assert format2_copy(response, 1, 3) == bytes([0x2A, 0x00, 0x01])
 
 
 def test_security_access_attributes_stay_off_the_request():

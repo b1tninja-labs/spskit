@@ -25,7 +25,9 @@ own ACDelco TDS subscription is licensed for.
   also carries `partnum` values, each a part string, a hyphen, and a decimal. The function returns
   the body. Gson writes `type`, not a Jackson `@type`, on the VIN and the option composite.
 - `wrapper.parse_init()` classifies the GM wrapper connect string and does not load a library.
-  `vit1.format0_decimal()` reads a service `$1A` response. A dongle send belongs to `vcxtoolkit`.
+  `vit1.format0_decimal()`, `format1_text()`, and `format2_copy()` read a service `$1A` response.
+  A dongle send belongs to `vcxtoolkit`. The method-128 reads whose parts are a plain DID list
+  and whose hardware is format 0, length 4, start 1 are paired. K73's format-2 hardware is not.
 - `spskit login` posts the password and asks the host to email a code. It writes the challenge to the
   session file and does not write the code. `spskit code` reads that challenge, waits for the code, and
   writes the access token from the redirect. A dropped connection retries, and `spskit code` can be

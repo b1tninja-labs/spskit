@@ -83,6 +83,8 @@ until a real read is on disk.
 | `sk.vit1.siblings` | `vit1.module_attributes()` pairs a saved read for K33, K20, and K9, and `vit1.programming_data_request()` attaches it | fixture request methods from the VIN catalog | `[ok]` | `tests/test_vit1.py::test_k33_k20_and_k9_reads_attach_as_vit1_blocks` |
 | `sk.vit1.format0` | `vit1.format0_decimal()` reads the GMLAN format-0 integer from a service $1A response | spsvcs FUN_10015d80 | `[ok]` | `tests/test_wrapper.py::test_a_positive_gmlan_response_is_the_format0_decimal` |
 | `sk.wrapper.init` | `wrapper.parse_init()` classifies the connect string and does not load a library | J2534Tool.init and CSpsVcsImpl::Init | `[ok]` | `tests/test_wrapper.py::test_the_percent_form_names_the_version_and_the_tool` |
+| `sk.vit1.rest` | `vit1.module_attributes()` pairs the other method-128 reads whose parts and hardware are format 0, length 4, start 1 | fixture-fresh.json supportedControllers | `[ok]` | `tests/test_vit1.py::test_the_other_method_128_reads_attach` |
+| `sk.vit1.format12` | `vit1.format1_text()` and `vit1.format2_copy()` read the other two GMLAN formats | spsvcs FUN_10015d80 | `[ok]` | `tests/test_vit1.py::test_format1_is_two_characters_per_byte_and_format2_is_the_slice` |
 
 ### Not this slice
 

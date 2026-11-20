@@ -26,8 +26,8 @@ stores each one under `SPS_DOWNLOAD_DIR/cache/{id}/{version}/` and skips a file 
 there. Add `--refresh` to fetch it again.
 
 `spskit sps --vin` writes that vehicle's module catalog to `spsinfo.sqlite` in the download directory.
-`vit1.programming_data_request()` builds the programming-data body for K17, K33, K20, and K9 from
-a saved module read and returns it.
+`vit1.programming_data_request()` builds the programming-data body for the method-128 reads on
+this VIN from a saved module read and returns it.
 
 Files are written to `SPS_DOWNLOAD_DIR`. This package does not program a vehicle. The dongle belongs to
 `vcxtoolkit`. The split is `docs/tool-boundary.md`. SAE J2534 is not in the source library yet.

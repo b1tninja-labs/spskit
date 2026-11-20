@@ -1,4 +1,4 @@
-"""Programming-data request for K17, K33, K20, and K9.
+"""Programming-data request for the method-128 reads on this VIN.
 
 A saved module read is attribute pairs. Those pairs become the VIT1 control-module
 block on the controller. This module returns the request body. It does not post it.
@@ -33,16 +33,62 @@ class _ReadRule:
     part_dids: tuple[str, ...]
     hardware_decimal: bool
     cvn: bool
+    read_vin: bool = True
+    hardware_did: str | None = "CC"
 
+
+def _rule(
+    code: str,
+    device_id: int,
+    request_method: int,
+    part_dids: tuple[str, ...],
+    *,
+    hardware_did: str | None,
+    cvn: bool = False,
+    read_vin: bool = False,
+) -> _ReadRule:
+    return _ReadRule(
+        code,
+        device_id,
+        request_method,
+        part_dids,
+        hardware_did is not None,
+        cvn,
+        read_vin,
+        hardware_did,
+    )
+
+
+_C1_C2 = ("C1", "C2")
+_C1_C3 = ("C1", "C2", "C3")
+_A11_PARTS = ("C1", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "CA", "73")
+_P16_PARTS = (*PART_DIDS, "40", "42", "44", "67", "69", "71", "74", "76")
 
 # GMLAN format 0, length 4, start 1 prints four bytes from the first data byte.
 # K17's hardware length is 0, and that length does not print a decimal.
 # cvn_in_vit1 is the character 1 or 0. The digits sit in partnum after a hyphen.
+# A missing hardware DID means the request method does not read one.
 _RULES = (
     _ReadRule("K17", K17_DEVICE_ID, K17_REQUEST_METHOD, PART_DIDS, False, False),
     _ReadRule("K33", 153, 11231, PART_DIDS, True, False),
     _ReadRule("K20", 17, 11229, PART_DIDS, True, True),
     _ReadRule("K9", 64, 410, PART_DIDS + _PARTS_41_4A, True, False),
+    _rule("A22", 102, 446, ("C1",), hardware_did="CB"),
+    _rule("A11", 128, 432, _A11_PARTS, hardware_did="CB"),
+    _rule("B218R", 91, 11243, PART_DIDS, hardware_did="CB"),
+    _rule("B218L", 185, 11239, PART_DIDS, hardware_did="CB"),
+    _rule("B233B", 210, 388, _C1_C2, hardware_did="CB"),
+    _rule("K43", 49, 417, _C1_C3, hardware_did="CB"),
+    _rule("K84", 175, 427, _C1_C3, hardware_did="CB"),
+    _rule("T3", 129, 434, ("C1", "CA"), hardware_did="CB"),
+    _rule("K182", 187, 423, _C1_C2, hardware_did="CB"),
+    _rule("K109", 188, 428, _C1_C2, hardware_did="CB"),
+    _rule("K177", 43, 416, _C1_C2, hardware_did="CC"),
+    _rule("K107A", 29, 531, _C1_C3, hardware_did="CB", cvn=True),
+    _rule("K107B", 30, 532, _C1_C3, hardware_did="CC", cvn=True),
+    _rule("K118", 156, 530, _C1_C2, hardware_did=None),
+    _rule("P16", 96, 11242, _P16_PARTS, hardware_did="CB", read_vin=True),
+    _rule("K73", 151, 601, (), hardware_did="CB", read_vin=True),
 )
 _BY_CODE = {rule.code: rule for rule in _RULES}
 
@@ -88,6 +134,44 @@ def format0_decimal(response: bytes, start: int, length: int) -> str:
     return str(int.from_bytes(response[begin:end], "big"))
 
 
+def _response_slice(response: bytes, start: int, length: int, limit: int) -> bytes:
+    if not isinstance(response, bytes | bytearray):
+        raise Vit1Error("a module response is bytes")
+    if length not in range(1, limit + 1):
+        raise Vit1Error(f"this format length is 1 to {limit}")
+    if len(response) < 3 or response[2] == 0x7F:
+        raise Vit1Error("a negative response writes no number")
+    begin = start + 3
+    end = begin + length
+    if begin < 0 or len(response) < end:
+        raise Vit1Error("the response is shorter than the format slice")
+    return bytes(response[begin:end])
+
+
+def format1_text(response: bytes, start: int, length: int) -> str:
+    """Format 1: each selected byte becomes two characters.
+
+    Each nibble is added to ``0x30``. The characters run ``0`` through ``9``
+    and then ``:`` through ``?``. Length is 1 to 16. The slice is the same
+    start-plus-3 index as format 0.
+    """
+    text = []
+    for byte in _response_slice(response, start, length, 16):
+        text.append(chr(0x30 + (byte >> 4)))
+        text.append(chr(0x30 + (byte & 0x0F)))
+    return "".join(text)
+
+
+def format2_copy(response: bytes, start: int, length: int) -> bytes:
+    """Format 2: the selected bytes, copied as they are.
+
+    Length is 1 to 16. The rest of the native buffer stays 0, so this returns
+    only the copied slice. K73's hardware DID ``$81`` uses length 3 and is not
+    attached here, because those bytes are not yet a ``ssecuhn`` string.
+    """
+    return _response_slice(response, start, length, 16)
+
+
 def k17_attributes(*, vin: str, parts: Mapping[str, bytes], ssecuhn: str) -> tuple[tuple[str, str], ...]:
     """Pair a K17 read: vin from DID $90, one partno per $C1 through $CA, ssecuhn from $CC.
 
@@ -102,34 +186,42 @@ def module_attributes(
     *,
     vin: str,
     parts: Mapping[str, bytes],
-    hardware: bytes | str,
+    hardware: bytes | str | None = None,
     cvn: str | None = None,
     partnums: Sequence[str] = (),
 ) -> tuple[tuple[str, str], ...]:
-    """Pair a saved read for K17, K33, K20, or K9.
+    """Pair a saved read for one method-128 request method on this VIN.
 
     Parts are 4 bytes from byte 1, printed in base 10, in request-method order.
-    K33, K20, and K9 store ``ssecuhn`` from DID ``$CC`` the same way. K17 keeps
-    the hardware string. K20's ``cvn_in_vit1`` is ``1`` or ``0``. When it is
-    ``1``, each ``partnum`` is the part string, a hyphen, and a decimal.
+    A hardware DID of format 0, length 4, start 1 is that same decimal. K17
+    keeps the hardware string. A request method that does not read hardware or
+    a VIN omits that pair. ``cvn_in_vit1`` is ``1`` or ``0``. When it is ``1``,
+    each ``partnum`` is the part string, a hyphen, and a decimal.
     """
     rule = _BY_CODE.get(code)
     if rule is None:
-        raise Vit1Error("a module read is K17, K33, K20, or K9")
-    checked = _vin(vin)
-    if rule.hardware_decimal:
+        raise Vit1Error("this controller is not a saved-read rule")
+    pairs: list[tuple[str, str]] = []
+    if rule.hardware_did is None:
+        if hardware is not None:
+            raise Vit1Error(f"{rule.code} does not read a hardware id")
+    elif rule.hardware_decimal:
         if not isinstance(hardware, bytes | bytearray):
-            raise Vit1Error(f"{rule.code} hardware DID CC is 4 bytes from byte 1")
-        ssecuhn = decimal_partno(bytes(hardware))
+            raise Vit1Error(f"{rule.code} hardware DID {rule.hardware_did} is 4 bytes from byte 1")
+        pairs.append(("ssecuhn", decimal_partno(bytes(hardware))))
     elif not isinstance(hardware, str) or hardware == "":
         raise Vit1Error("ssecuhn is the hardware string from the read")
     else:
-        ssecuhn = hardware
+        pairs.append(("ssecuhn", hardware))
+    if rule.read_vin:
+        pairs.append(("vin", _vin(vin)))
+    elif vin != "":
+        raise Vit1Error(f"{rule.code} does not read a VIN")
     if set(parts) != set(rule.part_dids):
         raise Vit1Error(f"{rule.code} needs one part payload per part DID on its request method")
-    partnos = tuple(("partno", decimal_partno(parts[did])) for did in rule.part_dids)
-    numbers = _cvn_tail(rule, cvn, partnums)
-    return (("ssecuhn", ssecuhn), ("vin", checked), *partnos, *numbers)
+    pairs.extend(("partno", decimal_partno(parts[did])) for did in rule.part_dids)
+    pairs.extend(_cvn_tail(rule, cvn, partnums))
+    return tuple(pairs)
 
 
 def build_vit1(attributes: Sequence[tuple[str, str]]) -> dict[str, object]:
@@ -173,7 +265,7 @@ def programming_data_request(
     option_composite: Mapping[str, object],
     attributes: Sequence[tuple[str, str]],
 ) -> dict[str, object]:
-    """The body of POST /sps/legacy/cloud/getProgrammingData for K17, K33, K20, or K9.
+    """The body of POST /sps/legacy/cloud/getProgrammingData for one saved read.
 
     ``controller`` is the programming sequence. The saved read is attached as
     its ``vit1``. The caller supplies the catalog documents. This function does
@@ -185,13 +277,19 @@ def programming_data_request(
     pairs = _pairs(attributes)
     names = [name for name, _ in pairs]
     cvn_count = 1 if rule.cvn else 0
-    if names.count("vin") != 1 or names.count("ssecuhn") != 1 or names.count("partno") != len(rule.part_dids):
+    vin_count = 1 if rule.read_vin else 0
+    hardware_count = 1 if rule.hardware_did is not None else 0
+    if (
+        names.count("vin") != vin_count
+        or names.count("ssecuhn") != hardware_count
+        or names.count("partno") != len(rule.part_dids)
+    ):
         if rule.code == "K17":
             raise Vit1Error("a K17 read is one vin, ten part numbers, and one ssecuhn")
         raise Vit1Error(f"a {rule.code} read does not match its request method")
     if names.count("cvn_in_vit1") != cvn_count:
         if rule.cvn:
-            raise Vit1Error("K20 stores cvn_in_vit1 as 1 or 0")
+            raise Vit1Error(f"{rule.code} stores cvn_in_vit1 as 1 or 0")
         raise Vit1Error("CVN stays off this request")
     cvn_values = [value for name, value in pairs if name == "cvn_in_vit1"]
     partnum_count = names.count("partnum")
@@ -207,7 +305,7 @@ def programming_data_request(
         elif name == "partno" and (not value.isdigit() or (len(value) > 1 and value.startswith("0"))):
             raise Vit1Error("a partno is the decimal from 4 bytes of the part DID")
         elif name == "ssecuhn" and value == "":
-            raise Vit1Error("ssecuhn is the hardware id from DID CC")
+            raise Vit1Error("ssecuhn is the hardware id from the read")
         elif name == "cvn_in_vit1" and value not in {"0", "1"}:
             raise Vit1Error("cvn_in_vit1 is 1 or 0")
         elif name == "partnum":
@@ -268,7 +366,7 @@ def _rule_for(controller: Mapping[str, object]) -> _ReadRule:
     for rule in _RULES:
         if controller.get("deviceId") == rule.device_id and method_id == rule.request_method:
             return rule
-    raise Vit1Error("this body is getProgrammingData for K17, K33, K20, or K9")
+    raise Vit1Error("this controller is not a saved-read rule")
 
 
 def _vin(vin: str) -> str:
