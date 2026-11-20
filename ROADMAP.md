@@ -81,6 +81,8 @@ until a real read is on disk.
 |---|---|---|---|---|
 | `sk.vit1.request` | `vit1.programming_data_request()` attaches a saved K17 module read as VIT1 control-module blocks on the controller | saved module read; the traced post with no vit1 is `VIT_NO_VALID_CMB` | `[ok]` | `tests/test_vit1.py::test_a_saved_k17_read_is_the_vit1_block_on_the_request` |
 | `sk.vit1.siblings` | `vit1.module_attributes()` pairs a saved read for K33, K20, and K9, and `vit1.programming_data_request()` attaches it | fixture request methods from the VIN catalog | `[ok]` | `tests/test_vit1.py::test_k33_k20_and_k9_reads_attach_as_vit1_blocks` |
+| `sk.vit1.format0` | `vit1.format0_decimal()` reads the GMLAN format-0 integer from a service $1A response | spsvcs FUN_10015d80 | `[ok]` | `tests/test_wrapper.py::test_a_positive_gmlan_response_is_the_format0_decimal` |
+| `sk.wrapper.init` | `wrapper.parse_init()` classifies the connect string and does not load a library | J2534Tool.init and CSpsVcsImpl::Init | `[ok]` | `tests/test_wrapper.py::test_the_percent_form_names_the_version_and_the_tool` |
 
 ### Not this slice
 

@@ -6,7 +6,9 @@
 
 `spskit` builds the SPS request. A saved module read becomes the VIT1 block on `getProgrammingData`. It does not open a COM port, load `VCX.dll`, or write `HKLM\SOFTWARE\PassThruSupport.04.04`.
 
-If a native client must look like `spsvcs`, this package is the one that would speak the GM wrapper. That is the init string `%04.04%J2534,<tool name>` when no connection name is already set, the key `HKLM\SOFTWARE\GM\J2534Wrapper`, and the four exports `GetDefaultDeviceInfo`, `ClearDefaultDeviceInfo`, `GetConnectedDeviceInfo`, and `GetDeviceStatus`. That wrapper is not implemented here. `j2534bridge.dll`, which would turn those exports into `PassThruOpen`, is not in this tree and is not assigned to either package.
+`wrapper.parse_init()` classifies the connect string. An empty string asks for the default device. `%04.04%J2534,<tool name>` is the wrapper form. `AUTO` and `COM<port>,<baud>` are the two forms native Init special-cases. Any other text is a connection name Techline already selected. The key is `SOFTWARE\GM\J2534Wrapper`, value `FunctionLibrary`, and the four names are `GetDefaultDeviceInfo`, `ClearDefaultDeviceInfo`, `GetConnectedDeviceInfo`, and `GetDeviceStatus`. The function does not load a library. `j2534bridge.dll` was not found on this machine. `spsvcs.dll` exports those four names as its own API and also resolves them on the missing wrapper.
+
+`vit1.format0_decimal()` reads a service `$1A` response. Byte 2 must not be `0x7F`. Start byte 1 and length 4 are response bytes 4 through 7. This package does not build the request a dongle would send.
 
 ## vcxtoolkit
 

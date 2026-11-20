@@ -68,6 +68,26 @@ def decimal_partno(payload: bytes) -> str:
     return str(int.from_bytes(payload[PART_START:end], "big"))
 
 
+def format0_decimal(response: bytes, start: int, length: int) -> str:
+    """The GMLAN format-0 integer from a service ``$1A`` response.
+
+    Response byte 2 is the service. ``0x7F`` writes nothing. The start byte is
+    added to 3, so start 1 is response byte 4. Length is 1 to 4. The bytes are
+    an unsigned integer, first byte most significant.
+    """
+    if not isinstance(response, bytes | bytearray):
+        raise Vit1Error("a module response is bytes")
+    if length not in range(1, 5):
+        raise Vit1Error("format 0 length is 1 to 4")
+    if len(response) < 3 or response[2] == 0x7F:
+        raise Vit1Error("a negative response writes no number")
+    begin = start + 3
+    end = begin + length
+    if begin < 0 or len(response) < end:
+        raise Vit1Error("the response is shorter than the format-0 slice")
+    return str(int.from_bytes(response[begin:end], "big"))
+
+
 def k17_attributes(*, vin: str, parts: Mapping[str, bytes], ssecuhn: str) -> tuple[tuple[str, str], ...]:
     """Pair a K17 read: vin from DID $90, one partno per $C1 through $CA, ssecuhn from $CC.
 

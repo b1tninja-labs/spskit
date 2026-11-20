@@ -24,6 +24,8 @@ own ACDelco TDS subscription is licensed for.
   read. K9 adds part DIDs `$41` through `$4A`. K20 carries `cvn_in_vit1` as `1` or `0`. A `1`
   also carries `partnum` values, each a part string, a hyphen, and a decimal. The function returns
   the body. Gson writes `type`, not a Jackson `@type`, on the VIN and the option composite.
+- `wrapper.parse_init()` classifies the GM wrapper connect string and does not load a library.
+  `vit1.format0_decimal()` reads a service `$1A` response. A dongle send belongs to `vcxtoolkit`.
 - `spskit login` posts the password and asks the host to email a code. It writes the challenge to the
   session file and does not write the code. `spskit code` reads that challenge, waits for the code, and
   writes the access token from the redirect. A dropped connection retries, and `spskit code` can be
