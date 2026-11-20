@@ -29,7 +29,7 @@ there. Add `--refresh` to fetch it again.
 `vit1.programming_data_request()` builds the programming-data body for K17, K33, K20, and K9 from
 a saved module read and returns it.
 
-Files are written to `SPS_DOWNLOAD_DIR`. This package does not program a vehicle. That step needs a J2534
-pass-through, and SAE J2534 is not in the source library yet.
+Files are written to `SPS_DOWNLOAD_DIR`. This package does not program a vehicle. The dongle belongs to
+`vcxtoolkit`. The split is `docs/tool-boundary.md`. SAE J2534 is not in the source library yet.
 
 Standard library only. Apache-2.0.

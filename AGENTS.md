@@ -29,7 +29,8 @@ Use the pinned toolchain in `projecthub/src/projecthub/shells/requirements-dev.t
    The reset PUT, when that separate captured path runs, posts `newPassword` and nothing else. The token
    request has no password field. Do not copy a password into the tree.
 4. **No vehicle programming.** No security access, no calibration transfer, and no SAE J2534 pass-through until
-   that document is in `primarysource`. Do not state an RFC or ISO section from memory; read it through
-   `primarysource` first.
+   that document is in `primarysource`. The dongle and `PassThruSupport.04.04` belong to `vcxtoolkit`.
+   The GM wrapper contract, if it is ever spoken, belongs here. `docs/tool-boundary.md` is the split.
+   Do not state an RFC or ISO section from memory; read it through `primarysource` first.
 5. **Downloads land outside the repository**, at the absolute `SPS_DOWNLOAD_DIR`. A filename that is not a single
    plain name is refused.

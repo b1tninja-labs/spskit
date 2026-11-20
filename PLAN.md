@@ -39,11 +39,12 @@ own ACDelco TDS subscription is licensed for.
 
 - The sign-in password is posted as `passwd`. A separate captured reset, not used by `spskit login`,
   sends `newPassword`. Neither value is sent to the token endpoint.
-- It does not talk to a vehicle. Programming a controller is a later step and needs the VCX/VXDIAG J2534
-  pass-through. ISO 14229-1:2013 clause 15.4.4 names SAE J2534 as the link between the application and the
-  service-tool hardware, and says the vehicle side uses manufacturer-proprietary information. SAE J2534 is not
-  in `primarysource`, so `obd-bridge` does not grow a pass-through in this change, and this package does not
-  invent one.
+- It does not talk to a vehicle. The dongle, the serial frame, and a `PassThruSupport.04.04` registry
+  record belong to `vcxtoolkit`. This package does not open a COM port or write that key. If a native
+  client must look like `spsvcs`, the GM wrapper contract (`SOFTWARE\GM\J2534Wrapper` and its four
+  exports) is the piece this package would own, and it is not built. `j2534bridge.dll` is not assigned
+  to either package. The split is `docs/tool-boundary.md`. SAE J2534 is not in `primarysource`, so this
+  package does not invent a pass-through.
 - It does not implement security access or a calibration transfer. `spskit sps --vin` does not download a calibration file.
 - The K17 programming-data body stays in the process. Sending it waits for a module read saved
   outside the repository. Service `$27` and a calibration download stay out of this package.
