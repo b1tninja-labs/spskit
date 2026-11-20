@@ -88,7 +88,13 @@ same request. Method 2 (`VCI`) does not: `isProgrammingByVCI` sends that sequenc
 `/getVciProgrammingData`. K124, K74, K114B, and K36 are method 1. Their part lists are plain
 DIDs at format 0, length 4, start 1, so the builder pairs them. K36's hardware DID is `$C1`,
 the same read as its first part. K16 stays off: `partAddresses` is `P;C0,C1,C2` and the part
-length is 0.
+length is 0. That string is handed to the native reader as `pszPartAddresses`. The
+DLL has no stored copy of the text, so the prefix is not split here.
+
+`vit1.vci_programming_data_request()` is the other body, for method 2 and method 256.
+The field name is `vciVOList`. A null step list becomes `[]`, which is what the
+constructor stores. The documents in those lists are the caller's. A null `mcvm` is
+omitted. The function does not post.
 
 ## Where the bytes go
 

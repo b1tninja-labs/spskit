@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from spskit.spsinfo import SpsInfoError, check_vin
 
 PROGRAMMING_DATA_PATH = "/sps/legacy/cloud/getProgrammingData"
+VCI_PROGRAMMING_DATA_PATH = "/sps/legacy/cloud/getVciProgrammingData"
 K17_DEVICE_ID = 40
 K17_REQUEST_METHOD = 11228
 PART_DIDS = ("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "CA")
@@ -279,9 +280,53 @@ def programming_data_request(
     its ``vit1``. The caller supplies the catalog documents. This function does
     not read a VIN catalog, open a socket, or fill part numbers itself.
     """
-    rule = _rule_for(controller)
     if method.get("methodId") not in {1, 128}:
         raise Vit1Error("this body is the getProgrammingData request, method 1 or 128")
+    sequence = _controller_with_read(controller, attributes)
+    # SpsGson does not call serializeNulls(), so a null mcvm is omitted.
+    return {
+        "clientState": _document(client_state, "clientState"),
+        "spsVin": _document(sps_vin, "spsVin"),
+        "method": _document(method, "method"),
+        "controller": sequence,
+        "optionComposite": _document(option_composite, "optionComposite"),
+    }
+
+
+def vci_programming_data_request(
+    *,
+    client_state: Mapping[str, object],
+    sps_vin: Mapping[str, object],
+    method: Mapping[str, object],
+    controller: Mapping[str, object],
+    attributes: Sequence[tuple[str, str]],
+    function_steps: Sequence[Mapping[str, object]] | None = None,
+    vci_steps: Sequence[Mapping[str, object]] | None = None,
+) -> dict[str, object]:
+    """The body of POST /sps/legacy/cloud/getVciProgrammingData.
+
+    Method 2 and method 256 take this shape. A null step list is the empty
+    list the constructor stores. The documents inside the lists are the
+    caller's. This function does not invent a VCI step, and it does not post.
+    """
+    if method.get("methodId") not in {2, 256}:
+        raise Vit1Error("this body is the getVciProgrammingData request, method 2 or 256")
+    sequence = _controller_with_read(controller, attributes)
+    return {
+        "clientState": _document(client_state, "clientState"),
+        "spsVin": _document(sps_vin, "spsVin"),
+        "method": _document(method, "method"),
+        "controller": sequence,
+        "functionSteps": [_document(item, "functionSteps") for item in function_steps or ()],
+        "vciVOList": [_document(item, "vciVOList") for item in vci_steps or ()],
+    }
+
+
+def _controller_with_read(
+    controller: Mapping[str, object],
+    attributes: Sequence[tuple[str, str]],
+) -> dict[str, object]:
+    rule = _rule_for(controller)
     pairs = _pairs(attributes)
     names = [name for name, _ in pairs]
     cvn_count = 1 if rule.cvn else 0
@@ -329,14 +374,7 @@ def programming_data_request(
         raise Vit1Error("the module read did not produce a control-module block")
     sequence = _document(controller, "controller")
     sequence["vit1"] = vit1
-    # SpsGson does not call serializeNulls(), so a null mcvm is omitted.
-    return {
-        "clientState": _document(client_state, "clientState"),
-        "spsVin": _document(sps_vin, "spsVin"),
-        "method": _document(method, "method"),
-        "controller": sequence,
-        "optionComposite": _document(option_composite, "optionComposite"),
-    }
+    return sequence
 
 
 def _cvn_tail(rule: _ReadRule, cvn: str | None, partnums: Sequence[str]) -> tuple[tuple[str, str], ...]:

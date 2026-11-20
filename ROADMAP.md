@@ -85,6 +85,7 @@ until a real read is on disk.
 | `sk.wrapper.init` | `wrapper.parse_init()` classifies the connect string and does not load a library | J2534Tool.init and CSpsVcsImpl::Init | `[ok]` | `tests/test_wrapper.py::test_the_percent_form_names_the_version_and_the_tool` |
 | `sk.vit1.rest` | `vit1.module_attributes()` pairs the other method-128 reads whose parts and hardware are format 0, length 4, start 1 | fixture-fresh.json supportedControllers | `[ok]` | `tests/test_vit1.py::test_the_other_method_128_reads_attach` |
 | `sk.vit1.normal` | `vit1.programming_data_request()` accepts method 1, the same body as method 128, for K124, K74, K114B, and K36 | GetProgrammingDataTask and ProgrammingMethod.isProgrammingByVCI | `[ok]` | `tests/test_vit1.py::test_method_1_reads_use_the_same_programming_data_body` |
+| `sk.vit1.vci` | `vit1.vci_programming_data_request()` builds the method 2 and 256 body and copies the caller's step lists | ProgrammingDataVCIRequest | `[ok]` | `tests/test_vit1.py::test_method_2_is_the_vci_body_and_does_not_invent_steps` |
 | `sk.vit1.format12` | `vit1.format1_text()` and `vit1.format2_copy()` read the other two GMLAN formats | spsvcs FUN_10015d80 | `[ok]` | `tests/test_vit1.py::test_format1_is_two_characters_per_byte_and_format2_is_the_slice` |
 
 ### Not this slice

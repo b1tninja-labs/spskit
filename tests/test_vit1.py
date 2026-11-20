@@ -7,6 +7,7 @@ import pytest
 
 from spskit.vit1 import (
     PROGRAMMING_DATA_PATH,
+    VCI_PROGRAMMING_DATA_PATH,
     Vit1Error,
     build_vit1,
     decimal_partno,
@@ -15,6 +16,7 @@ from spskit.vit1 import (
     k17_attributes,
     module_attributes,
     programming_data_request,
+    vci_programming_data_request,
 )
 
 VIN = "1G1TE5TVN00000001"
@@ -329,6 +331,33 @@ def test_method_1_reads_use_the_same_programming_data_body():
         )
     with pytest.raises(Vit1Error, match="not a saved-read rule"):
         module_attributes("K16", vin=VIN, parts={}, hardware=None)
+
+
+def test_method_2_is_the_vci_body_and_does_not_invent_steps():
+    attributes = module_attributes("K114B", vin=VIN, parts={"C1": _payload(1), "C2": _payload(2)})
+    body = vci_programming_data_request(
+        client_state=CLIENT,
+        sps_vin=SPS_VIN,
+        method={"methodId": 2, "description": "VCI", "blockSameCal": False},
+        controller=_controller("K114B", 203, 529, "C1,C2", read_cvn=0),
+        attributes=attributes,
+        vci_steps=({"caller": "step"},),
+    )
+    assert VCI_PROGRAMMING_DATA_PATH == "/sps/legacy/cloud/getVciProgrammingData"
+    assert list(body) == ["clientState", "spsVin", "method", "controller", "functionSteps", "vciVOList"]
+    assert body["functionSteps"] == []
+    assert body["vciVOList"] == [{"caller": "step"}]
+    assert body["controller"]["vit1"]["cmbs"][0]["vitAttrs"][0]["key"] == "vin"
+    assert "optionComposite" not in body
+    assert "mcvm" not in body
+    with pytest.raises(Vit1Error, match="method 2 or 256"):
+        vci_programming_data_request(
+            client_state=CLIENT,
+            sps_vin=SPS_VIN,
+            method=METHOD,
+            controller=_controller("K114B", 203, 529, "C1,C2", read_cvn=0),
+            attributes=attributes,
+        )
 
 
 def test_format1_is_two_characters_per_byte_and_format2_is_the_slice():
