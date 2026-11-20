@@ -10,6 +10,9 @@ from dataclasses import dataclass
 from spskit.catalog import LicensedModule
 
 CREDENTIALS_PATH = "/cdn/files/public/downloadCredentials"
+# DownloadFileService sets Cookie and Range only. The bundled Corretto 11.0.19
+# HttpURLConnection then sends this User-Agent.
+FILE_USER_AGENT = "Java/11.0.19"
 
 
 class DownloadError(ValueError):

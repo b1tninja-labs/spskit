@@ -22,6 +22,7 @@ from spskit.catalog import (
 from spskit.config import Settings
 from spskit.download import (
     CREDENTIALS_PATH,
+    FILE_USER_AGENT,
     DownloadGrant,
     cached_file,
     credentials_body,
@@ -165,7 +166,9 @@ def request_grant(settings: Settings, module: LicensedModule, exchange: Exchange
 
 
 def fetch_module(settings: Settings, module: LicensedModule, grant: DownloadGrant, exchange: Exchange) -> pathlib.Path:
-    status, raw = exchange("GET", grant.url, None, grant.headers)
+    headers = dict(grant.headers)
+    headers["User-Agent"] = FILE_USER_AGENT
+    status, raw = exchange("GET", grant.url, None, headers)
     if status != 200:
         raise CatalogError(f"file status {status}")
     if not raw:

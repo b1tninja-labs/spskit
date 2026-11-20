@@ -93,6 +93,7 @@ def test_download_writes_beside_the_given_directory(tmp_path: pathlib.Path):
             assert b"secret" not in body
             return 200, json.dumps(grant_body).encode()
         assert headers["Cookie"] == "download=1"
+        assert headers["User-Agent"] == "Java/11.0.19"
         return 200, b"module-bytes"
 
     grant = request_grant(settings, MODULE, exchange)

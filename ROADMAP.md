@@ -43,7 +43,7 @@ so this package does not speak to a vehicle.
 | `sk.catalog.bearer` | `client.list_modules()` sends the SPOREF cookie bearer when supplied and does not send the saved access token | captured permissions request | `[ok]` | `tests/test_catalog.py::test_listing_does_not_send_the_saved_access_token` |
 | `sk.download.body` | `download.credentials_body()` asks for one module with empty token fields | captured downloadCredentials request | `[ok]` | `tests/test_download.py::test_the_request_starts_with_empty_token_fields` |
 | `sk.download.grant` | `download.parse_grant()` accepts one https URL and a single plain filename | captured downloadCredentials response | `[ok]` | `tests/test_download.py::test_a_grant_must_be_https_and_a_plain_filename` |
-| `sk.download.save` | `client.fetch_module()` writes the bytes under `cache/{id}/{version}/` in the download directory and nowhere else | captured file fetch | `[ok]` | `tests/test_download.py::test_download_writes_beside_the_given_directory` |
+| `sk.download.save` | `client.fetch_module()` writes the bytes under `cache/{id}/{version}/` in the download directory and nowhere else, and sends User-Agent `Java/11.0.19` | captured file fetch and the bundled Corretto | `[ok]` | `tests/test_download.py::test_download_writes_beside_the_given_directory` |
 
 ### Licensed files
 

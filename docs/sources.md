@@ -136,7 +136,9 @@ has no address for it. Download Delivery caches the 302, so another request to t
 The launcher script `tlc-web/static/js/main.c202f1fe.js` posts that same public body and passes the
 returned `url` and `filename` to FileSaver `saveAs`. FileSaver checks the URL with a HEAD and then
 downloads it. It does not call NetStorage. TUM's `DownloadFileService` opens the grant URL with
-`URLConnection`, reads `Content-Length`, and requests `Range: bytes=` in 5000000-byte chunks. A live
+`URLConnection`, sets `Cookie` and `Range`, and does not set `User-Agent`. The bundled Corretto's
+`java.version` is `11.0.19`, and `HttpURLConnection` sends `Java/11.0.19`. The file GET uses that
+agent. It reads `Content-Length`, and requests `Range: bytes=` in 5000000-byte chunks. A live
 public grant for TUM2 is `https://tlc-cdn.gm.com/cache-downloads/public/Prod/TUM2/26.8.28.0.zip`
 with a `Cookie` and no query. `GET /oauth/user/token/child` is a separate call: the SPOREF cookies
 alone are 401, and the SPS-INFO bearer is `UTS113`. TUM's `POST /cdn/files/downloadCredentials`
