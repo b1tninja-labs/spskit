@@ -47,7 +47,13 @@ another download URL.
 ## Which request returns the file list
 
 The programming-data call is chosen from the method, and each one goes through `RestTemplate` as a
-path on the SPS2 service base (the base is the Techline session, not a host compiled into the jar):
+path on the SPS2 service base. The cloud properties file `prodPcf/environment.properties` sets that
+base to `https://tlc-dmz-gateway.ext.gm.com/sps/legacy/cloud`. The same path on the gateway root
+is not the service. The body is `clientState`, `spsVin`, `method`, `controller`, `mcvm`, and
+`optionComposite`. The option composite is the object paired with the method in the fixture's
+controller tree. For this VIN the brake module (`K17`, function Programming, method id 128) carries
+an empty `ProductionOptionComposite`. A POST with the SPS Info bearer reached that service and
+returned no file list before the session expired. No part file was written.
 
 | Method | Service | Path |
 | --- | --- | --- |
