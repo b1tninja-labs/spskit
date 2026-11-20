@@ -42,6 +42,16 @@ def credentials_body(module: LicensedModule) -> dict[str, object]:
     }
 
 
+def refuse_storage_redirect(url: str) -> None:
+    """Stop before a cached NetStorage redirect. The edge is supposed to chase that name itself."""
+    host = urllib.parse.urlsplit(url).hostname
+    if host is None:
+        return
+    lowered = host.lower().rstrip(".")
+    if lowered == "stor.lb.akamai.net" or lowered.endswith(".stor.lb.akamai.net"):
+        raise DownloadError(f"the CDN cached a redirect to {lowered}, and that host has no public address")
+
+
 def safe_filename(name: str) -> str:
     if not name or name in {".", ".."} or "/" in name or "\\" in name or name.startswith("."):
         raise DownloadError("filename is not a single plain name")

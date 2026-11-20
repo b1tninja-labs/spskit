@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import json
 import pathlib
+import urllib.request
+from http.client import HTTPMessage
 
 import pytest
 
 from spskit.catalog import LicensedModule
+from spskit.cli import _CodeRedirect
 from spskit.client import fetch_module, request_grant
 from spskit.config import Settings
-from spskit.download import DownloadError, credentials_body, parse_grant, save_bytes
+from spskit.download import DownloadError, credentials_body, parse_grant, refuse_storage_redirect, save_bytes
 
 MODULE = LicensedModule("25", "Example module", "A licensed programming module", "SOFTWARE", "1.2.3")
 
@@ -43,6 +46,31 @@ def test_a_grant_must_be_https_and_a_plain_filename():
         parse_grant(
             {"downloadCredentials": [{"url": "https://cdn.example/a.bin", "filename": "../a.bin", "headers": {}}]}
         )
+
+
+def test_a_netstorage_redirect_is_not_followed():
+    handler = _CodeRedirect()
+    request = urllib.request.Request("https://tlc-cdn.gm.com/cache-downloads/public/Prod/TUM2/26.8.28.0.zip")
+    with pytest.raises(DownloadError, match="no public address"):
+        handler.redirect_request(
+            request,
+            None,
+            302,
+            "Found",
+            HTTPMessage(),
+            "https://r36048-f-40560.c.1.dsdl.b.stor.lb.akamai.net/file.zip",
+        )
+    followed = handler.redirect_request(
+        request,
+        None,
+        302,
+        "Found",
+        HTTPMessage(),
+        "https://cdn.example/file.zip",
+    )
+    assert followed is not None
+    assert followed.full_url == "https://cdn.example/file.zip"
+    refuse_storage_redirect("https://cdn.example/file.zip")
 
 
 def test_download_writes_beside_the_given_directory(tmp_path: pathlib.Path):

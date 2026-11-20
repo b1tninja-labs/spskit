@@ -37,6 +37,7 @@ from spskit.client import (
     sync_sps_vin,
 )
 from spskit.config import ConfigError, Settings, load_settings
+from spskit.download import refuse_storage_redirect
 from spskit.login_start import (
     BROWSER_USER_AGENT,
     CodeRejectedError,
@@ -136,6 +137,7 @@ class _CodeRedirect(urllib.request.HTTPRedirectHandler):
         location = redirect_location(newurl)
         if location is not None:
             raise _AuthorizationRedirectError(location)
+        refuse_storage_redirect(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
