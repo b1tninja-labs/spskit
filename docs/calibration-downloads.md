@@ -67,9 +67,11 @@ and a list of `DownloadServer`. A server is a `CALDownloadServer` (a URI, plus s
 flags) or a `DLSDownloadServer` (a URI, an Akamai flag, and a description).
 
 `vit1.programming_data_request()` builds that body for K17, K33, K20, and K9. A saved module read
-supplies the VIT1 control-module block on `controller`: `vin` from DID `$90`, one decimal `partno`
-per part DID, and `ssecuhn` as the hardware string the reader stored. K9's part list continues
-through `$4A`. K20 carries `cvn_in_vit1` as `1` or `0`, and a `1` also carries `partnum`. The
+supplies the VIT1 control-module block on `controller`: `vin` from DID `$90` and one decimal
+`partno` per part DID. K33, K20, and K9 store `ssecuhn` from DID `$CC` as that same 4-byte
+decimal. K17's hardware length is 0, so its `ssecuhn` stays the string from the read. K9's part
+list continues through `$4A`. K20 carries `cvn_in_vit1` as `1` or `0`, and a `1` also carries
+`partnum`. The
 programming-data writer is Gson, so the VIN and the option composite use `type`. The traced post
 of K17 with no `vit1` is `D:\data\spskit\re\programming-data-k17.json`, `errorCode`
 `VIT_NO_VALID_CMB`. The function returns the body. A live post waits until a real read is on disk.

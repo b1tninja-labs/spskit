@@ -189,12 +189,12 @@ def test_k33_k20_and_k9_reads_attach_as_vit1_blocks():
     k33_parts = {did: _payload(index) for index, did in enumerate(PART_DIDS, start=1)}
     k33 = _body_for(
         _controller("K33", 153, 11231, ",".join(PART_DIDS), read_cvn=0),
-        module_attributes("K33", vin=VIN, parts=k33_parts, hardware="fixture-hw"),
+        module_attributes("K33", vin=VIN, parts=k33_parts, hardware=_payload(42)),
     )
     k33_attrs = k33["controller"]["vit1"]["cmbs"][0]["vitAttrs"]
     assert k33["controller"]["deviceId"] == 153
     assert k33["controller"]["requestMethod"]["reqMethodID"] == 11231
-    assert k33_attrs[0] == {"key": "ssecuhn", "value": "fixture-hw"}
+    assert k33_attrs[0] == {"key": "ssecuhn", "value": "42"}
     assert [item["value"] for item in k33_attrs if item["key"] == "partno"] == [str(index) for index in range(1, 11)]
     assert "cvn_in_vit1" not in json.dumps(k33_attrs)
 
@@ -202,7 +202,7 @@ def test_k33_k20_and_k9_reads_attach_as_vit1_blocks():
     k9_parts = {did: _payload(index) for index, did in enumerate(k9_dids, start=1)}
     k9 = _body_for(
         _controller("K9", 64, 410, ",".join(k9_dids), read_cvn=0),
-        module_attributes("K9", vin=VIN, parts=k9_parts, hardware="fixture-hw"),
+        module_attributes("K9", vin=VIN, parts=k9_parts, hardware=_payload(7)),
     )
     k9_partnos = [item["value"] for item in k9["controller"]["vit1"]["cmbs"][0]["vitAttrs"] if item["key"] == "partno"]
     assert k9["controller"]["requestMethod"]["reqMethodID"] == 410
@@ -210,7 +210,7 @@ def test_k33_k20_and_k9_reads_attach_as_vit1_blocks():
 
     k20 = _body_for(
         _controller("K20", 17, 11229, ",".join(PART_DIDS), read_cvn=1),
-        module_attributes("K20", vin=VIN, parts=k33_parts, hardware="fixture-hw", cvn="1", partnums=("cell-15",)),
+        module_attributes("K20", vin=VIN, parts=k33_parts, hardware=_payload(3), cvn="1", partnums=("cell-15",)),
     )
     k20_attrs = k20["controller"]["vit1"]["cmbs"][0]["vitAttrs"]
     assert k20["controller"]["deviceId"] == 17
@@ -220,12 +220,13 @@ def test_k33_k20_and_k9_reads_attach_as_vit1_blocks():
     assert all(part not in encoded for part in CATALOG_PARTS)
     assert "0000A407" not in encoded
 
-    quiet = module_attributes("K20", vin=VIN, parts=k33_parts, hardware="fixture-hw", cvn="0")
+    quiet = module_attributes("K20", vin=VIN, parts=k33_parts, hardware=_payload(3), cvn="0")
     assert quiet[-1] == ("cvn_in_vit1", "0")
+    assert quiet[0] == ("ssecuhn", "3")
     with pytest.raises(Vit1Error, match="1 or 0"):
-        module_attributes("K20", vin=VIN, parts=k33_parts, hardware="fixture-hw", cvn="fixture-cvn")
+        module_attributes("K20", vin=VIN, parts=k33_parts, hardware=_payload(3), cvn="fixture-cvn")
     with pytest.raises(Vit1Error, match="CVN stays off"):
-        module_attributes("K33", vin=VIN, parts=k33_parts, hardware="fixture-hw", cvn="1", partnums=("cell-15",))
+        module_attributes("K33", vin=VIN, parts=k33_parts, hardware=_payload(42), cvn="1", partnums=("cell-15",))
 
 
 def test_security_access_attributes_stay_off_the_request():

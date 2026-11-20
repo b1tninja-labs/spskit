@@ -31,18 +31,18 @@ class _ReadRule:
     device_id: int
     request_method: int
     part_dids: tuple[str, ...]
+    hardware_decimal: bool
     cvn: bool
 
 
-# ssecuhn is the string the reader already stored. The request-method hardware
-# length and start byte are copied into the native record, and the function
-# that would apply them to DID CC was not found. readCvn names no DID.
+# GMLAN format 0, length 4, start 1 prints four bytes from the first data byte.
+# K17's hardware length is 0, and that length does not print a decimal.
 # cvn_in_vit1 is the character 1 or 0. The digits sit in partnum after a hyphen.
 _RULES = (
-    _ReadRule("K17", K17_DEVICE_ID, K17_REQUEST_METHOD, PART_DIDS, False),
-    _ReadRule("K33", 153, 11231, PART_DIDS, False),
-    _ReadRule("K20", 17, 11229, PART_DIDS, True),
-    _ReadRule("K9", 64, 410, PART_DIDS + _PARTS_41_4A, False),
+    _ReadRule("K17", K17_DEVICE_ID, K17_REQUEST_METHOD, PART_DIDS, False, False),
+    _ReadRule("K33", 153, 11231, PART_DIDS, True, False),
+    _ReadRule("K20", 17, 11229, PART_DIDS, True, True),
+    _ReadRule("K9", 64, 410, PART_DIDS + _PARTS_41_4A, True, False),
 )
 _BY_CODE = {rule.code: rule for rule in _RULES}
 
@@ -52,10 +52,13 @@ class Vit1Error(ValueError):
 
 
 def decimal_partno(payload: bytes) -> str:
-    """Four bytes from byte 1 of a part DID, printed in base 10.
+    """Four bytes from byte 1 of a DID payload, printed in base 10.
 
-    The first byte of the payload is left off. The next four are an unsigned
-    integer, first byte most significant.
+    Byte 0 is the DID echo. The next four are an unsigned integer, first byte
+    most significant. That is the GMLAN format-0 slice for start byte 1 and
+    length 4. A value at or above 2**31 would be printed with a minus for a
+    part. Hardware uses the unsigned print, and the part numbers in this
+    catalog sit below that line.
     """
     if not isinstance(payload, bytes | bytearray):
         raise Vit1Error("a part DID payload is bytes")
@@ -68,8 +71,8 @@ def decimal_partno(payload: bytes) -> str:
 def k17_attributes(*, vin: str, parts: Mapping[str, bytes], ssecuhn: str) -> tuple[tuple[str, str], ...]:
     """Pair a K17 read: vin from DID $90, one partno per $C1 through $CA, ssecuhn from $CC.
 
-    The four-byte part slice is only for the part DIDs. ssecuhn is the string
-    the reader stored.
+    The four-byte slice is the part DIDs. Hardware length on this request method
+    is 0, so ssecuhn stays the string from the read.
     """
     return module_attributes("K17", vin=vin, parts=parts, hardware=ssecuhn)
 
@@ -79,28 +82,34 @@ def module_attributes(
     *,
     vin: str,
     parts: Mapping[str, bytes],
-    hardware: str,
+    hardware: bytes | str,
     cvn: str | None = None,
     partnums: Sequence[str] = (),
 ) -> tuple[tuple[str, str], ...]:
     """Pair a saved read for K17, K33, K20, or K9.
 
     Parts are 4 bytes from byte 1, printed in base 10, in request-method order.
-    ``hardware`` is the ``ssecuhn`` string the reader stored. K20's ``cvn_in_vit1``
-    is ``1`` or ``0``. When it is ``1``, each ``partnum`` is the part string, a
-    hyphen, and the decimal from that part cell. The request method names no CVN DID.
+    K33, K20, and K9 store ``ssecuhn`` from DID ``$CC`` the same way. K17 keeps
+    the hardware string. K20's ``cvn_in_vit1`` is ``1`` or ``0``. When it is
+    ``1``, each ``partnum`` is the part string, a hyphen, and a decimal.
     """
     rule = _BY_CODE.get(code)
     if rule is None:
         raise Vit1Error("a module read is K17, K33, K20, or K9")
     checked = _vin(vin)
-    if not isinstance(hardware, str) or hardware == "":
+    if rule.hardware_decimal:
+        if not isinstance(hardware, bytes | bytearray):
+            raise Vit1Error(f"{rule.code} hardware DID CC is 4 bytes from byte 1")
+        ssecuhn = decimal_partno(bytes(hardware))
+    elif not isinstance(hardware, str) or hardware == "":
         raise Vit1Error("ssecuhn is the hardware string from the read")
+    else:
+        ssecuhn = hardware
     if set(parts) != set(rule.part_dids):
         raise Vit1Error(f"{rule.code} needs one part payload per part DID on its request method")
     partnos = tuple(("partno", decimal_partno(parts[did])) for did in rule.part_dids)
     numbers = _cvn_tail(rule, cvn, partnums)
-    return (("ssecuhn", hardware), ("vin", checked), *partnos, *numbers)
+    return (("ssecuhn", ssecuhn), ("vin", checked), *partnos, *numbers)
 
 
 def build_vit1(attributes: Sequence[tuple[str, str]]) -> dict[str, object]:
