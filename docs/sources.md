@@ -129,6 +129,11 @@ Resource 25 is `TLC Installer`, type `INITIAL_SOFTWARE`, and the grant's filenam
 `GET /acl/cdl/permissions/search`. A UUID is still a page. A version with `disabled`
 true is omitted. `spskit downloads --get` writes each version under
 `SPS_DOWNLOAD_DIR/cache/{id}/{version}/`. A file already in that directory is left in place.
+A later version is a sibling directory, so the older file stays for comparison. The permissions
+document for a resource currently lists one version. A disabled row is omitted, and the five
+resources checked on 2026-11-19 (`1`, `5`, `7`, `10`, `25`) each had one enabled version and no
+disabled row. The CDN directory of that object answers with the same cached NetStorage redirect,
+so it does not provide the missing older names.
 `spskit downloads --get --refresh` fetches it again. A cached edge redirect to
 `*.stor.lb.akamai.net` is reported and not followed. That name is Akamai NetStorage, and public DNS
 has no address for it. Download Delivery caches the 302, so another request to the same edge repeats it.
