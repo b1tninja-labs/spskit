@@ -94,20 +94,55 @@ server also gets the Akamai cookie. A 200 response is written to `{cache}/{blobN
 
 ## Reprogram
 
-Reprogram is a programming mode (`programming.mode.reprogram`). It does not have its own download
-URL. `DOWNLOAD_PROG_FILES_TASK` runs first and fetches every unit the programming-data response
+Reprogram is a programming mode (`programming.mode.reprogram`). SPS2 26.10.27 does not give that
+mode its own path. `DOWNLOAD_PROG_FILES_TASK` fetches every unit the programming-data response
 named, through the GET and the `/getCalibrationFile` POST above. `REPROGRAM_VEHICLE_TASK` then
-reads those blobs (`getCalibrationFiles`, `getProgrammingDataUnits`). It does not request a second
-file.
+reads those blobs (`getCalibrationFiles`, `getProgrammingDataUnits`).
 
-On a module, `currentSoftware` and `selectedSoftware` are the software part shown on the calibration
-summary and sent with the result. They are fields on `SPSModule`, not a request. The part's
-calibration list hangs off that same part (`getCalibrationParts`). For this VIN the operating-system
-part is already in that list: slot 1, `23394159`, label "Operating system", beside the electronic
-brake parts. Same cache path, same blob-name rule.
+That is the older client. The vehicle software file is a separate object in SPS3 26.10.27
+(`SPS3.jar`), the vehicle-wide programming client from the same cache generation. SPS2's
+`currentSoftware` and `selectedSoftware` are summary fields on `SPSModule`. They are not the
+download. The word firmware in the SPS2 jar is the J2534 tool's own version (`J2534Version`). A
+type-4 event is `POST /getType4App`, and it is not this download.
 
-The word firmware in this SPS2 build is the J2534 tool's own version (`J2534Version`), not a vehicle
-file. A type-4 event is a different download, `POST /getType4App`, and it is not the Reprogram mode.
+## Vehicle software parts
+
+SPS3 asks for the files after it has the functional steps:
+
+`POST {base.url}/sps/gspas/active/vehicles/ecus/functionalSteps/parts`
+
+The body is a `VehicleModel`: the event and the vehicle, including the ECUs that were selected.
+`{base.url}` is the Techline session base, the same kind of value SPS2 reads from
+`ClientApplicationContext.getServerUrl()`. It is not compiled into the jar.
+
+Each part in that response carries `number`, `url`, `checkSum`, `size`, and `moduleId`. A part may
+also carry `manifestPart`, `signaturePart`, and `internalParts`. The operating-system slot in this
+VIN's catalog is part `23394159`. In SPS3 that number is its own part, with its own URL, beside the
+calibration part numbers. The parts response is what fills the URL. This call has not been sent, so
+the URL for `23394159` is not known yet.
+
+Parts that already have a checksum, a number, a URL, and a size are downloaded. Missing any of
+those, the client skips the part. One token is requested per part that is not already in the cache:
+
+`POST {base.url}/cdn/files/gspas/credentials`
+
+The body is `{"numberOfTokens": N}`. The response is `{"tokens": [...]}`. The header map is the
+SPS3 session token from `AuthenticationService.getSps3Token`.
+
+The file GET is `{part.url}/{part.number}`. The token is sent as the `Cookie` header, not as
+`Authorization`. A follow-up request for a chunk adds a `Range` header. The joined file is checked
+against `checkSum` and written to `%USERPROFILE%\sps\spsCache\spsCacheInternal\{number}`. A file
+already there under that number is not fetched again.
+
+After the package is on disk, the manifest is `{number}.mnf` and the signature is `{number}.smd`.
+`internalParts` are the files inside that package, looked up by part number. The native programming
+library (`spsvcs.dll` 7.2.11) keeps an application-software partition and a calibration partition as
+separate names in its error strings. The manifest is what says which internal part is which. This
+note stops at the file on disk. It does not describe writing either partition to a controller.
+
+`TechUpdate`, `ForceTechUpdate`, `TechResidentUpdate`, and `GetPossibleSWDLActions` are exports of
+that same DLL. In this build the `TechUpdate` export logs the call and returns without building a
+URL. The download the Java client actually performs is the parts POST and the per-part GET above.
 
 ## USB copy
 

@@ -51,6 +51,7 @@ check, OnStar, infotainment, and no selection.
 ## Calibration files
 
 The catalog rows name the parts. The bytes come from the programming-data response, then from the
-server URI on that response or from `POST /getCalibrationFile`. The cache, the USB-copy package, and
-the method ids are in [calibration-downloads.md](calibration-downloads.md). `SPS Info`
+server URI on that response or from `POST /getCalibrationFile`. SPS3 downloads each part, including
+the operating-system part, as its own file. The cache, the USB-copy package, the method ids, and
+that per-part GET are in [calibration-downloads.md](calibration-downloads.md). `SPS Info`
 (`/cvn/partnumber/{part}`) returns a CVN for a part number. It does not return the file.

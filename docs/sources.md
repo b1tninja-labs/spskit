@@ -247,8 +247,8 @@ unselected fixture is refused. The response has `calibrationData`, `moduleData`,
 A later sync replaces the rows for that VIN.
 
 This does not download a calibration file and does not program a controller. The tool list is in
-[sps2-interfaces.md](sps2-interfaces.md). The programming-data call and the calibration fetch,
-including USB copy, are in [calibration-downloads.md](calibration-downloads.md).
+[sps2-interfaces.md](sps2-interfaces.md). The programming-data call, the calibration fetch, USB copy,
+and the SPS3 per-part software download are in [calibration-downloads.md](calibration-downloads.md).
 
 ## Vehicle programming
 
