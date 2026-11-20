@@ -246,8 +246,9 @@ unselected fixture is refused. The response has `calibrationData`, `moduleData`,
 `[part number, flag, label]`. `moduleData` is a list of `[slot, label]`. `cvnMap` maps a part number to its CVN.
 A later sync replaces the rows for that VIN.
 
-This does not download a calibration file and does not program a controller. The tool list and the
-calibration request live in SPS2; see [sps2-interfaces.md](sps2-interfaces.md).
+This does not download a calibration file and does not program a controller. The tool list is in
+[sps2-interfaces.md](sps2-interfaces.md). The programming-data call and the calibration fetch,
+including USB copy, are in [calibration-downloads.md](calibration-downloads.md).
 
 ## Vehicle programming
 

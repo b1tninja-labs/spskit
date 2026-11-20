@@ -38,10 +38,10 @@ bundle gives the first two a label:
 | `USB_COPY` | |
 | `USB_COPY_BSC` | |
 
-The VIN catalog stores the same split. For `1G1RD6S58HU102764` each function has a method described
-`Normal` and a method described `VCI`. `sps.programming-type.normal` is the label `Normal`. The class
-distinguishes them with `isProgrammingByVCI` and `isProgrammingByUSB`. `CalDownloadService` then has
-`handleDownloadForNormal`, `handleDownloadForUsb` and `handleDownloadForEthernet`.
+The VIN catalog stores the same split. For `1G1RD6S58HU102764` the method ids are Normal (`1`),
+VCI (`2`), and the block-same-cal forms of those two (`128`, `256`). USB Copy is in this build and
+is not one of those rows. The request, the cache, and the USB-copy package are in
+[calibration-downloads.md](calibration-downloads.md).
 
 `standard.user.input` is the label "Standard User Input". It sits with `invalid.user.input` and is the
 form prompt, not a second programming interface. `com.gm.sps.model.client.ProgrammingMode` is a
@@ -50,12 +50,7 @@ check, OnStar, infotainment, and no selection.
 
 ## Calibration files
 
-The catalog rows name the parts. The bytes come later, from SPS2, and land in
-`C:\ProgramData\GM\TDM\SPS Cache` (`tdm.calibration.files.path`). `CalDownloadService.downloadCalFileFromDB`
-posts `getCalibrationFile` through `RestTemplate` and reads an `InputStreamResponse`. The request type
-is `DownloadCalibrationFileRequest` (a download id, the client state, and the part). The server list
-on that call is `DownloadServer`, with subtypes `CALDownloadServer` and `DLSDownloadServer`; the
-programming-data response supplies those servers, so the file is not a row on the public CDN used for
-`TUM2` and `SPS2.msi`.
-
-`SPS Info` (`/cvn/partnumber/{part}`) returns a CVN for a part number. It does not return the file.
+The catalog rows name the parts. The bytes come from the programming-data response, then from the
+server URI on that response or from `POST /getCalibrationFile`. The cache, the USB-copy package, and
+the method ids are in [calibration-downloads.md](calibration-downloads.md). `SPS Info`
+(`/cvn/partnumber/{part}`) returns a CVN for a part number. It does not return the file.
