@@ -203,12 +203,12 @@ def programming_data_request(
         raise Vit1Error("the module read did not produce a control-module block")
     sequence = _document(controller, "controller")
     sequence["vit1"] = vit1
+    # SpsGson does not call serializeNulls(), so a null mcvm is omitted.
     return {
         "clientState": _document(client_state, "clientState"),
         "spsVin": _document(sps_vin, "spsVin"),
         "method": _document(method, "method"),
         "controller": sequence,
-        "mcvm": None,
         "optionComposite": _document(option_composite, "optionComposite"),
     }
 

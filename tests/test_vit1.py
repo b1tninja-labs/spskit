@@ -79,8 +79,8 @@ def test_a_saved_k17_read_is_the_vit1_block_on_the_request():
         attributes=attributes,
     )
     assert PROGRAMMING_DATA_PATH == "/sps/legacy/cloud/getProgrammingData"
-    assert list(body) == ["clientState", "spsVin", "method", "controller", "mcvm", "optionComposite"]
-    assert body["mcvm"] is None
+    assert list(body) == ["clientState", "spsVin", "method", "controller", "optionComposite"]
+    assert "mcvm" not in list(body)
     assert body["method"] == METHOD
     assert body["optionComposite"] == OPTIONS
     controller = body["controller"]
@@ -97,6 +97,7 @@ def test_a_saved_k17_read_is_the_vit1_block_on_the_request():
     assert controller["vit1"]["vitAttrs"] == []
     assert controller["vit1"]["freeOptions"] == {"vitAttrs": []}
     encoded = json.dumps(body)
+    assert "mcvm" not in encoded
     assert body["spsVin"]["type"] == "NAOVin"
     assert body["optionComposite"]["type"] == "ProductionOptionComposite"
     assert "@type" not in encoded
