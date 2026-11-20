@@ -107,17 +107,35 @@ this VIN does not carry a PCI segment, so that flag is only visible after progra
 back. The landing-page mode Infotainment Service is a third list and does not itself select the USB
 drive.
 
-The download function treats the event as USB only after a drive has been selected
-(`SPSModel.getSelectedUsbDrive()`). The USB screen asks for a FAT32 volume
-(`select.drive.for.data.transfer.message`, `usb.drive.selection`). The summary warns that the
-selected drive will be cleared before the transfer (`usb.drive.will.be.reformatted.warning`).
+Once a drive is selected, USB Copy and a large-file step use the same fetch. The programming-data
+response is what names the file. USB Copy and USB Copy with block-same-cal use `/getProgrammingData`.
+USB Copy by VCI uses `/getVciProgrammingData`. A GSPAS large-file step uses `/getProgrammingDataGspas`.
+Each unit in that response has a blob name, a blob id, a download id, and the server list. The SPS2
+service base is `ClientApplicationContext.getServerUrl()`, filled from the Techline session. It is
+not compiled into the jar.
 
-The file fetch is the same `getUnit` path as a normal event. After it lands, the client unpacks the
-archive onto the drive. For a GSPAS USB package it then posts the VIN and a manifest file to
-`POST /sps/gspas/active/vin-verification` and writes the returned hash beside the package as
-`{VIN}.lic`. A GSPAS event can also upload a blob with
-`PUT /sps/gspas/active/events/{id}/blob`. Neither of those is a CDN object. This VIN's catalog does
-not include a USB-copy method to select.
+`CalDownloadService.download` then does two attempts, in order:
 
-Ethernet is the third branch (`preparing.for.ethernet`). It uses the same GET, then places the file
-under the cache's archive directory for that step.
+1. `GET {server URI}/{downloadId}` with `Authorization: bearer` and the Techline access token. An
+   Akamai server also sends the Akamai cookie. A 200 is written to `{SPS cache}/{blobName}`. The
+   default cache is `C:\ProgramData\GM\TDM\SPS Cache`. The same blob name replaces the file already
+   there.
+2. If that GET fails, or the server list is empty, `POST {serverUrl}/getCalibrationFile`. The body
+   is `DownloadCalibrationFileRequest`: the VIN's service id, `isArchive` false, `partNo` set to the
+   blob name, and download id `0`. The response stream is written to the same cache path.
+
+The zip is then unpacked at the root of the selected drive. The client writes
+`indication.{blobName}.{blobId}` there, one line, the unit checksum in hex. A later run that finds
+a matching indication file skips the unpack. A GSPAS package that contains a `.mnf` entry also
+`POST`s `/sps/gspas/active/vin-verification` (the VIN plus that manifest as the `file` part) and
+writes the returned hash as `{VIN}.lic` on the drive. A package with no `.mnf` skips the license
+file. A GSPAS event can upload a blob with `PUT /sps/gspas/active/events/{id}/blob`.
+
+For PCI segment 3 the download is the whole step. After the package validates, the client marks
+that step successful and does not keep going into the normal calibration summary. Segments 2, 5,
+10, and 13 stay on the cache path: ethernet and delta files land under `{cache}/archive/{stepId}/`,
+and an ethernet blob uses the `.smd` extension.
+
+None of these objects are on the CDN that served `SPS2.msi`. This VIN's catalog has no USB-copy
+method, and the stored fixture has no PCI segment, so the blob name and the server URI are not
+known until one of those programming-data calls returns.
