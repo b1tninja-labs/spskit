@@ -92,6 +92,23 @@ the download id. The header is `Authorization: bearer` plus the Techline access 
 server also gets the Akamai cookie. A 200 response is written to `{cache}/{blobName}`.
 `getGspasCalData` is the same fetch for a GSPAS unit. The client retries a status other than 200.
 
+## Reprogram
+
+Reprogram is a programming mode (`programming.mode.reprogram`). It does not have its own download
+URL. `DOWNLOAD_PROG_FILES_TASK` runs first and fetches every unit the programming-data response
+named, through the GET and the `/getCalibrationFile` POST above. `REPROGRAM_VEHICLE_TASK` then
+reads those blobs (`getCalibrationFiles`, `getProgrammingDataUnits`). It does not request a second
+file.
+
+On a module, `currentSoftware` and `selectedSoftware` are the software part shown on the calibration
+summary and sent with the result. They are fields on `SPSModule`, not a request. The part's
+calibration list hangs off that same part (`getCalibrationParts`). For this VIN the operating-system
+part is already in that list: slot 1, `23394159`, label "Operating system", beside the electronic
+brake parts. Same cache path, same blob-name rule.
+
+The word firmware in this SPS2 build is the J2534 tool's own version (`J2534Version`), not a vehicle
+file. A type-4 event is a different download, `POST /getType4App`, and it is not the Reprogram mode.
+
 ## USB copy
 
 The USB drive screen opens for a function only when that function's method is `USB_COPY`,
