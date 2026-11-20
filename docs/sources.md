@@ -164,7 +164,8 @@ itself the Techline Connect launcher. Its launch button sets `document.location`
 `TLC_ACCESS_TOKEN`, `TLC_REFRESH_TOKEN`, `IBM_GATEWAY_URI`, `IBM_CLIENT_ID`, `IBM_CLIENT_SECRET`.
 The button sends `Y`, the environment name `prod`, `Y` or `N` for the admin checkbox, and the access
 and refresh tokens from `GET /oauth/user/token/child?tokenType=tum2`. The other fields are the literal
-`NA`. Those tokens are not written here.
+`NA`. Those tokens are not written here. The page that holds the token, and the call that mints the
+`tum2` child, are recorded in [tlc-handoff.md](tlc-handoff.md).
 
 The same page downloads the installer with `POST /cdn/files/public/downloadCredentials` for
 `TLC Installer` `26.8.31.0` `INITIAL_SOFTWARE`. The file is
