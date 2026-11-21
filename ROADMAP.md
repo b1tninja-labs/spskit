@@ -73,9 +73,11 @@ One VIN the subscription can open. The rows are the controller tree and the cali
 
 ### Programming data
 
-The body of `POST /sps/legacy/cloud/getProgrammingData` for K17, K33, K20, and K9. A saved module
-read supplies the VIT1 control-module block. The function returns that body. A live post waits
-until a real read is on disk.
+The body of `POST /sps/legacy/cloud/getProgrammingData`, and the screens that follow a response.
+A saved module read supplies the VIT1 control-module block. These functions return that body or
+the next screen. They do not post, and they do not download a calibration. Hardware selection
+stays undecided because `VCI.isValid` is not decompiled. K73 request methods 520 and 566 stay
+unattached. A live post waits until a real read is on disk.
 
 | Id | Obligation | Spec | Status | Evidence |
 |---|---|---|---|---|
