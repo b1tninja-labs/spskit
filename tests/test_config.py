@@ -25,13 +25,16 @@ def test_the_example_names_the_secrets_and_leaves_them_empty():
 
 def test_process_environment_overrides_the_file(tmp_path: pathlib.Path):
     env_file = tmp_path / ".env"
+    anchor = pathlib.Path(tmp_path.anchor)
     env_file.write_text(
-        "TDS_USERNAME=from-file\nTDS_PASSWORD=file-secret\nSPS_DOWNLOAD_DIR=D:/data/spskit\n", encoding="utf-8"
+        f"TDS_USERNAME=from-file\nTDS_PASSWORD=file-secret\nSPS_DOWNLOAD_DIR={anchor / 'data' / 'spskit'}\n",
+        encoding="utf-8",
     )
-    settings = load_settings(env_file, {"TDS_USERNAME": "from-shell", "SPS_DOWNLOAD_DIR": "D:/data/other"})
+    override = anchor / "data" / "other"
+    settings = load_settings(env_file, {"TDS_USERNAME": "from-shell", "SPS_DOWNLOAD_DIR": str(override)})
     assert settings.username == "from-shell"
     assert settings.password == "file-secret"
-    assert settings.download_dir == pathlib.Path("D:/data/other")
+    assert settings.download_dir == override
 
 
 def test_a_relative_download_directory_is_refused():
