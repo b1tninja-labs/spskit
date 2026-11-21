@@ -148,6 +148,11 @@ non-empty `partsToInstall` list returns `DOWNLOAD_PROG_FILES_TASK`. A pure MCVM 
 `mcvmProgramming` set and no modules, returns `CHARACTERIZE_DATA_TASK`. A null method
 returns `ToolLock.unlock`.
 
+`needs_vit1()` is the gate in front of the module read. `VIT.isEmpty` looks only at
+the header `vitAttrs` list, so a document whose pairs sit on `cmbs` still needs the
+read. Device 252 is not read itself. A missing `mapOfControllers` raises when the
+header check does not already return, because the client calls `entrySet` on that map.
+
 ## Where the bytes go
 
 `CalDownloadService.downloadFiles` sums the blob sizes, then branches on the event rather than on

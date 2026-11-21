@@ -20,6 +20,7 @@ from spskit.vit1 import (
     format2_copy,
     k17_attributes,
     module_attributes,
+    needs_vit1,
     normal_programming_data_loop,
     programming_data_request,
     programming_method_screen,
@@ -499,6 +500,22 @@ def test_reprogramming_names_the_task_and_does_not_download():
     assert sequence_reprogramming((), method_present=False) == "ToolLock.unlock"
     with pytest.raises(Vit1Error, match="programmingDataUnits is null"):
         sequence_reprogramming(({"partsToInstall": ["caller-part"]},), method_present=True, root={"deviceId": 40})
+
+
+def test_a_headerless_vit1_still_needs_the_read():
+    assert needs_vit1({"deviceId": 40}) is True
+    blocks_only = {
+        "deviceId": 40,
+        "vit1": {"vitAttrs": [], "cmbs": [{"vitAttrs": [{"key": "partno", "value": "100"}]}]},
+    }
+    assert needs_vit1(blocks_only) is True
+    held = {"deviceId": 40, "vit1": {"vitAttrs": [{"key": "vin", "value": "1"}], "cmbs": []}, "mapOfControllers": {}}
+    assert needs_vit1(held) is False
+    with pytest.raises(Vit1Error, match="mapOfControllers is null"):
+        needs_vit1({"deviceId": 40, "vit1": {"vitAttrs": [{"key": "vin", "value": "1"}]}})
+    child = {"deviceId": 17}
+    assert needs_vit1({"deviceId": 252, "mapOfControllers": {"K20": child}}) is True
+    assert needs_vit1({"deviceId": 252, "mapOfControllers": {}}) is False
 
 
 def test_method_2_is_the_vci_body_and_does_not_invent_steps():

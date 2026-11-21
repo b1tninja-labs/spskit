@@ -266,6 +266,48 @@ def build_vit1(attributes: Sequence[tuple[str, str]]) -> dict[str, object]:
     return _vit1(header, blocks, free)
 
 
+def needs_vit1(controller: Mapping[str, object]) -> bool:
+    """Whether ``needsVIT1`` reads this sequence before the programming-data post.
+
+    Device 252 is not read itself; each value of ``mapOfControllers`` is.
+    Any other device is read when ``vit1`` is missing or its header
+    ``vitAttrs`` is empty. Blocks on ``cmbs`` do not count. A missing map
+    raises once that header check does not already return, because the client
+    calls ``entrySet`` on the map.
+    """
+    return _needs_vit1(_document(controller, "controller"))
+
+
+def _needs_vit1(document: dict[str, object]) -> bool:
+    device = document.get("deviceId")
+    if type(device) is not int:
+        raise Vit1Error("controller deviceId is not an integer")
+    if device != 252 and _header_empty(document.get("vit1")):
+        return True
+    children = document.get("mapOfControllers")
+    if children is None:
+        raise Vit1Error("mapOfControllers is null")
+    if not isinstance(children, dict):
+        raise Vit1Error("mapOfControllers is not a map")
+    for child in children.values():
+        if not isinstance(child, dict):
+            raise Vit1Error("mapOfControllers value is not a controller")
+        if _needs_vit1(child):
+            return True
+    return False
+
+
+def _header_empty(vit1: object) -> bool:
+    if vit1 is None:
+        return True
+    if not isinstance(vit1, dict):
+        raise Vit1Error("vit1 is not a document")
+    attrs = vit1.get("vitAttrs")
+    if not isinstance(attrs, list):
+        raise Vit1Error("vitAttrs is null")
+    return not attrs
+
+
 def programming_data_request(
     *,
     client_state: Mapping[str, object],

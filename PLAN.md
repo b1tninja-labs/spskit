@@ -43,7 +43,9 @@ own ACDelco TDS subscription is licensed for.
   list are both filled, and otherwise stop at instructions or name reprogramming
   without downloading. `calibration_selection_needed()` is true for `type` `VCI` when a
   part list is empty and `listOfModules` is not. `sequence_reprogramming()` names the
-  next task, including a calibration download, and does not start it. K73's format-2
+  next task, including a calibration download, and does not start it.
+  `needs_vit1()` is the read gate: a device other than 252 is read when `vit1` is
+  missing or its header `vitAttrs` is empty. Blocks on `cmbs` do not count. K73's format-2
   hardware is not paired,
   and neither is K16's `P;C0,C1,C2` part text.
 - `spskit login` posts the password and asks the host to email a code. It writes the challenge to the
