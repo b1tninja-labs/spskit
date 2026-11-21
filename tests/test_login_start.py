@@ -335,6 +335,86 @@ def test_the_stay_signed_in_redirect_page_is_posted_back():
     assert submit_email_code(settings, requested, "abcd1234", exchange) == REDIRECT
 
 
+def test_confirmation_followed_by_a_redirect_form_is_posted_back():
+    settings = Settings(
+        "person@example.com",
+        "current-secret",
+        "https://gateway.example",
+        "https://ciam.example",
+        "",
+        Path("D:/data/spskit"),
+    )
+    requested = EmailRequest(
+        MfaChallenge(8, "flow-after-begin", "ctx-after-begin", "form-canary", "corr-begin", "person@example.com"),
+        "b" * 43,
+    )
+    cmsi = """<html><title>Sign in to your account</title><script>$Config={"sFT":"flow-cmsi",
+"sCtx":"ctx-cmsi","canary":"canary-cmsi","sessionId":"sess-cmsi","correlationId":"corr-cmsi",
+"pgid":"CmsiInterrupt","stsErrorCode":399218,"urlPost":"/appverify"};</script></html>"""
+    redirecting = """<html><title>Redirecting</title><script>$Config={"sFT":"flow-on-redirect",
+"stsErrorCode":50168,"urlPost":"/kmsi","oPostParams":{"LoginOptions":"1","type":"28","ctx":"ctx-kmsi",
+"hpgrequestid":"sess-kmsi","flowToken":"flow-kmsi","canary":"canary-kmsi","i19":"0"},
+"bsso":{"cookieNames":{"ssoPulled":"SSOCOOKIEPULLED"}}};</script></html>"""
+
+    def exchange(_method, url, body, headers):
+        if url.endswith("/ProcessAuth"):
+            return 200, cmsi.encode()
+        if url.endswith("/appverify"):
+            assert "otc" not in parse_qs(body.decode())
+            return 200, redirecting.encode()
+        assert "sso_reload=true" in url
+        assert headers["cookie"] == "SSOCOOKIEPULLED=1"
+        assert parse_qs(body.decode())["flowToken"] == ["flow-kmsi"]
+        return 302, REDIRECT.encode()
+
+    assert submit_email_code(settings, requested, "abcd1234", exchange) == REDIRECT
+
+
+def test_a_redirect_page_with_a_flow_token_is_posted_back():
+    settings = Settings(
+        "person@example.com",
+        "current-secret",
+        "https://gateway.example",
+        "https://ciam.example",
+        "",
+        Path("D:/data/spskit"),
+    )
+    requested = EmailRequest(
+        MfaChallenge(8, "flow-after-begin", "ctx-after-begin", "form-canary", "corr-begin", "person@example.com"),
+        "b" * 43,
+    )
+    redirecting = """<html><title>Redirecting</title><script>$Config={"sFT":"flow-on-redirect",
+"stsErrorCode":50168,"urlPost":"/kmsi","oPostParams":{"LoginOptions":"1","type":"28","ctx":"ctx-kmsi",
+"hpgrequestid":"sess-kmsi","flowToken":"flow-kmsi","canary":"canary-kmsi","i19":"0"},
+"bsso":{"cookieNames":{"ssoPulled":"SSOCOOKIEPULLED"}}};</script></html>"""
+    stayed = """<html><title>Sign in to your account</title><script>$Config={"sFT":"flow-after-reload",
+"sCtx":"ctx-after-reload","canary":"canary-after","sessionId":"sess-after","correlationId":"corr-after",
+"pgid":"KmsiInterrupt","urlPost":"/kmsi","sErrorCode":"50140"};</script></html>"""
+    posts = {"kmsi": 0}
+
+    def exchange(_method, url, body, headers):
+        if url.endswith("/ProcessAuth"):
+            return 200, KMSI.encode()
+        if "sso_reload=true" in url:
+            assert headers["cookie"] == "SSOCOOKIEPULLED=1"
+            form = parse_qs(body.decode())
+            assert form["flowToken"] == ["flow-kmsi"]
+            assert "otc" not in form
+            return 200, stayed.encode()
+        assert url.endswith("/kmsi")
+        posts["kmsi"] += 1
+        if posts["kmsi"] == 1:
+            return 200, redirecting.encode()
+        form = parse_qs(body.decode())
+        assert form["flowToken"] == ["flow-after-reload"]
+        assert form["hpgrequestid"] == ["sess-after"]
+        assert "otc" not in form
+        return 302, REDIRECT.encode()
+
+    assert submit_email_code(settings, requested, "abcd1234", exchange) == REDIRECT
+    assert posts["kmsi"] == 2
+
+
 def test_an_expired_challenge_is_named():
     settings = Settings(
         "person@example.com",

@@ -10,7 +10,16 @@ import urllib.request
 
 import pytest
 
-from spskit.cli import _TryingHTTPSConnection, run, urllib_exchange
+from spskit.cli import (
+    _JAR,
+    _cookie_records,
+    _restore_cookie,
+    _store_cookie,
+    _TryingHTTPSConnection,
+    gateway_cookie_names,
+    run,
+    urllib_exchange,
+)
 from spskit.login_start import BROWSER_USER_AGENT, LoginError
 from spskit.verify import parse_challenge
 
@@ -327,6 +336,20 @@ def test_a_saved_token_retries_the_backend_without_a_new_code(tmp_path, capsys):
     assert "backend_pending" not in saved
     assert "stay" not in saved
     assert "access-token-value-0001" not in capsys.readouterr().out
+
+
+def test_restored_sso_pulled_cookie_matches_the_sign_in_host():
+    _JAR.clear()
+    _store_cookie("https://ciam.example/kmsi", "SSOCOOKIEPULLED=pulled")
+    records = _cookie_records()
+    _JAR.clear()
+    for record in records:
+        _restore_cookie(record)
+    assert gateway_cookie_names("ciam.example") == ["SSOCOOKIEPULLED"]
+    request = urllib.request.Request("https://ciam.example/")
+    _JAR.add_cookie_header(request)
+    assert request.get_header("Cookie") == "SSOCOOKIEPULLED=pulled"
+    _JAR.clear()
 
 
 def test_gateway_cookie_names_are_only_names():

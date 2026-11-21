@@ -16,6 +16,8 @@ own ACDelco TDS subscription is licensed for.
   leaves a file that is already there. `--refresh` fetches it again.
 - `spskit sps --vin` reads the SPS Info catalog for that one VIN and writes it to `SPS_DOWNLOAD_DIR/spsinfo.sqlite`.
   Running it again replaces that VIN. The file holds module names and part numbers.
+- `spskit launch --slot` posts the Techline Connect handoff for that subscription slot and writes the
+  launcher token into the session file. It does not print the token or replace the sign-in access token.
 - `vit1.programming_data_request()` builds `POST /sps/legacy/cloud/getProgrammingData` for K17
   (device 40, request method 11228), K33 (153, 11231), K20 (17, 11229), and K9 (64, 410). A saved
   module read is attached as the VIT1 control-module block: `vin` from DID `$90`, one decimal
@@ -85,6 +87,7 @@ From this directory:
     python -m spskit downloads
     python -m spskit downloads --get
     python -m spskit sps --vin <VIN>
+    python -m spskit launch --slot <id>
     python -m spskit login
     python -m spskit code
     python -m spskit session

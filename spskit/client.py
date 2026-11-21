@@ -502,6 +502,21 @@ def _site_origin(settings: Settings) -> str:
     return f"{site.scheme}://{site.netloc}"
 
 
+def _backend_sporef_headers(settings: Settings, exchange: Exchange) -> dict[str, str]:
+    """Headers for a backend page that returns a SPOREF redirection form."""
+    if not settings.access_token:
+        raise SessionExpiredError("there is no saved session")
+    origin = _site_origin(settings)
+    apim = _apim_token(settings, exchange)
+    return {
+        "Authorization": f"Bearer {apim}",
+        "X-EEID-Access-Token": settings.access_token,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Origin": origin,
+        "Referer": origin + "/",
+    }
+
+
 def _sps_document(status: int, raw: bytes, step: str) -> dict[str, object]:
     if status == 401:
         raise SessionExpiredError("the TDS session expired")
@@ -518,17 +533,7 @@ def _sps_document(status: int, raw: bytes, step: str) -> dict[str, object]:
 
 def request_sps_form(settings: Settings, exchange: Exchange) -> SporefForm:
     """GET the SPOREF page with the API Management bearer and the saved access token."""
-    if not settings.access_token:
-        raise SessionExpiredError("there is no saved session")
-    origin = _site_origin(settings)
-    apim = _apim_token(settings, exchange)
-    headers = {
-        "Authorization": f"Bearer {apim}",
-        "X-EEID-Access-Token": settings.access_token,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Origin": origin,
-        "Referer": origin + "/",
-    }
+    headers = _backend_sporef_headers(settings, exchange)
     status, raw = 500, b""
     for _attempt in range(3):
         status, raw = exchange(
@@ -542,6 +547,103 @@ def request_sps_form(settings: Settings, exchange: Exchange) -> SporefForm:
         if status != 500:
             break
     raise SessionExpiredError(f"SPS Info was refused ({status}; {_backend_error(raw)})")
+
+
+def request_vin_access_form(settings: Settings, slot_id: str, exchange: Exchange) -> SporefForm:
+    """GET the Techline Connect SPOREF page for one subscription slot id."""
+    if not slot_id or any(character in slot_id for character in "/ \r\n\t"):
+        raise SpsInfoError("the subscription slot id is missing")
+    status, raw = exchange(
+        "GET",
+        f"{settings.backend}/api/v1/subscriptions/vin/access/{slot_id}",
+        None,
+        _backend_sporef_headers(settings, exchange),
+    )
+    if status == 401:
+        raise SessionExpiredError("the TDS session expired")
+    if status != 200:
+        raise SessionExpiredError(f"Techline Connect was refused ({status}; {_backend_error(raw)})")
+    return parse_sporef_form(raw)
+
+
+def browser_access_bearer(exchange: Exchange, *, access_token: str = "") -> str:
+    """The browser access token after the techpd handoff.
+
+    A test exchange does not store Set-Cookie, so the caller passes ``access_token``. The real
+    transport reads ``BROWSER_ACCESS_TOKEN`` from the jar after the handoff.
+    """
+    if access_token:
+        if any(character.isspace() for character in access_token):
+            raise SpsInfoError("Techline Connect did not return a session")
+        return access_token
+    from spskit.cli import urllib_exchange
+
+    if exchange is not urllib_exchange:
+        raise SpsInfoError("Techline Connect did not return a session")
+    from spskit.cli import _JAR
+
+    found: str | None = None
+    for cookie in _JAR:
+        if cookie.name != "BROWSER_ACCESS_TOKEN":
+            continue
+        if cookie.value:
+            found = cookie.value
+            break
+    if not found:
+        raise SpsInfoError("Techline Connect did not return a session")
+    return found
+
+
+def launcher_browser_bearer(
+    settings: Settings,
+    slot_id: str,
+    exchange: Exchange,
+    *,
+    browser_access_token: str = "",
+) -> str:
+    """Post the techpd handoff and return the browser access token for the launcher page."""
+    submit_sporef_form(settings, request_vin_access_form(settings, slot_id, exchange), exchange)
+    return browser_access_bearer(exchange, access_token=browser_access_token)
+
+
+def _wrapper_token(wrapper: object) -> str:
+    if not isinstance(wrapper, Mapping):
+        raise SessionExpiredError("the child token response is not an object")
+    value = wrapper.get("tokenValue")
+    if not isinstance(value, str) or not value or any(character.isspace() for character in value):
+        raise SessionExpiredError("the child token is missing")
+    return value
+
+
+def parse_child_token(payload: Mapping[str, object]) -> TokenPair:
+    """Keep the access and refresh token values and drop every other field."""
+    return TokenPair(
+        _wrapper_token(payload.get("accessToken")),
+        _wrapper_token(payload.get("refreshToken")),
+    )
+
+
+def child_token(settings: Settings, bearer: str, exchange: Exchange, token_type: str) -> TokenPair:
+    """GET a child token from the gateway."""
+    if not bearer or any(character.isspace() for character in bearer):
+        raise SpsInfoError("Techline Connect did not return a session")
+    if not token_type or any(character in token_type for character in "?&=/ \r\n\t"):
+        raise SpsInfoError("the token type is missing")
+    query = urllib.parse.quote(token_type, safe="")
+    status, raw = exchange(
+        "GET",
+        f"{settings.gateway}/oauth/user/token/child?tokenType={query}",
+        None,
+        acl_headers(bearer),
+    )
+    if status == 401:
+        raise SessionExpiredError("the gateway refused the session")
+    if status != 200:
+        raise CatalogError(f"gateway status {status}")
+    payload = json.loads(raw.decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise SessionExpiredError("the child token response is not an object")
+    return parse_child_token(payload)
 
 
 def open_gateway_session(settings: Settings, exchange: Exchange) -> None:

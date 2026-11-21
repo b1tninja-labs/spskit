@@ -334,40 +334,29 @@ def submit_email_code(
         if status != 200:
             raise LoginError(f"the sign-in host refused the confirmation ({status})")
         text = raw.decode("utf-8", errors="replace")
+        obj = _page_object(text)
         page = parse_page_config(text)
-        if page is None:
-            status, raw = _post_redirect(settings, exchange, text, settings.ciam + _APP_VERIFY)
-            if status != 200:
-                raise LoginError(
-                    f"the sign-in host refused the confirmation ({status})\n{describe_sign_in_page(text, status)}"
-                )
-            text = raw.decode("utf-8", errors="replace")
-            page = parse_page_config(text)
+        # A redirect form, or the same confirmation page, is followed. The stay-signed-in
+        # page falls through so it can be saved before it is posted.
+        redirect_form = (
+            isinstance(obj, dict)
+            and isinstance(obj.get("oPostParams"), dict)
+            and (page or {}).get("pgid") != "KmsiInterrupt"
+        )
+        if redirect_form or _is_app_verify(page or {}):
+            return _finish_redirect(settings, exchange, status, raw, settings.ciam + _APP_VERIFY)
         detail = describe_sign_in_page(text, status)
         if page is None:
             raise LoginError(f"the sign-in host rejected that code\n{detail}")
         if _error_code(page) == "InvalidOneTimePasscode":
             raise CodeRejectedError(_next_challenge(challenge, page))
-    session_id = _text(page, "sessionId")
-    ctx = _text(page, "sCtx")
-    flow = _text(page, "sFT")
-    canary = _text(page, "canary") or _text(page, "apiCanary")
-    missing = [
-        name
-        for name, value in (("sCtx", ctx), ("sessionId", session_id), ("sFT", flow), ("canary", canary))
-        if not value
-    ]
+    kmsi = _kmsi_fields(page)
+    missing = [name for name, value in kmsi if name in {"ctx", "hpgrequestid", "flowToken", "canary"} and not value]
     if missing:
-        raise LoginError(f"the email code was not accepted\n{detail}; missing {','.join(missing)}")
-    kmsi = [
-        ("LoginOptions", "1"),
-        ("type", "28"),
-        ("ctx", ctx),
-        ("hpgrequestid", session_id),
-        ("flowToken", flow),
-        ("canary", canary),
-        ("i19", "0"),
-    ]
+        shown = {"ctx": "sCtx", "hpgrequestid": "sessionId", "flowToken": "sFT", "canary": "canary"}
+        raise LoginError(
+            f"the email code was not accepted\n{detail}; missing {','.join(shown[name] for name in missing)}"
+        )
     try:
         url = _kmsi_url(settings, page)
     except LoginError as exc:
@@ -604,6 +593,19 @@ def _post_app_verify(settings: Settings, page: Mapping[str, object], exchange: E
     return _form_call(exchange, url, fields, settings.ciam + _PROCESS, {"origin": settings.ciam})
 
 
+def _kmsi_fields(page: Mapping[str, object]) -> list[tuple[str, str]]:
+    """The stay-signed-in form. `hpgrequestid` is the page `sessionId`."""
+    return [
+        ("LoginOptions", "1"),
+        ("type", "28"),
+        ("ctx", _text(page, "sCtx")),
+        ("hpgrequestid", _text(page, "sessionId")),
+        ("flowToken", _text(page, "sFT")),
+        ("canary", _text(page, "canary") or _text(page, "apiCanary")),
+        ("i19", "0"),
+    ]
+
+
 def _kmsi_url(settings: Settings, config: Mapping[str, object]) -> str:
     raw = _text(config, "urlPost")
     if raw:
@@ -625,17 +627,44 @@ def _redirect_url(status: int, raw: bytes) -> str:
     return location
 
 
-def _finish_redirect(settings: Settings, exchange: Exchange, status: int, raw: bytes, referer: str) -> str:
-    """The stay-signed-in response is a 302, or the same Redirecting page the earlier steps post back."""
+def _finish_redirect(
+    settings: Settings,
+    exchange: Exchange,
+    status: int,
+    raw: bytes,
+    referer: str,
+    hops: int = 4,
+) -> str:
+    """Follow the stay-signed-in response until it is the TDS redirect.
+
+    A 302 is that redirect. A Redirecting page is posted back even when it also carries
+    `sFT`. A later confirmation or stay-signed-in page is posted the same way. `hops`
+    bounds the chain.
+    """
     if status in (301, 302, 303, 307, 308):
         return _redirect_url(status, raw)
     text = raw.decode("utf-8", errors="replace")
-    obj = _page_object(text)
-    if isinstance(obj, dict) and isinstance(obj.get("oPostParams"), dict) and parse_page_config(text) is None:
+    obj = _page_object(text) if hops > 0 else None
+    if isinstance(obj, dict) and isinstance(obj.get("oPostParams"), dict):
         status, raw = _post_redirect(settings, exchange, text, referer)
-        if status in (301, 302, 303, 307, 308):
-            return _redirect_url(status, raw)
-        text = raw.decode("utf-8", errors="replace")
+        posted = _text(obj, "urlPost")
+        next_referer = _redirect_target(settings, posted) if posted else referer
+        return _finish_redirect(settings, exchange, status, raw, next_referer, hops - 1)
+    page = parse_page_config(text) if hops > 0 else None
+    if page is not None and _is_app_verify(page):
+        status, raw = _post_app_verify(settings, page, exchange)
+        return _finish_redirect(settings, exchange, status, raw, settings.ciam + _APP_VERIFY, hops - 1)
+    if page is not None:
+        fields = _kmsi_fields(page)
+        ready = all(value for name, value in fields if name != "i19")
+        if ready:
+            try:
+                url = _kmsi_url(settings, page)
+            except LoginError:
+                url = ""
+            if url:
+                status, raw = _form_call(exchange, url, fields, referer, {"origin": settings.ciam})
+                return _finish_redirect(settings, exchange, status, raw, url, hops - 1)
     _raise_if_expired(text, status)
     raise LoginError(f"the sign-in host did not return the TDS redirect\n{describe_sign_in_page(text, status)}")
 

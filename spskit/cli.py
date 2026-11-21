@@ -25,7 +25,9 @@ from typing import IO
 from spskit.catalog import LicensedModule
 from spskit.client import (
     Exchange,
+    child_token,
     exchange_authorization_code,
+    launcher_browser_bearer,
     licensed_downloads,
     list_modules,
     open_backend_session,
@@ -63,6 +65,7 @@ from spskit.session import (
     read_stay,
     session_path,
     write_cookies,
+    write_launcher_tokens,
     write_session,
     write_signin,
     write_stay,
@@ -177,7 +180,7 @@ def _store_cookie(url: str, header: str) -> None:
             "/",
             True,
             True,
-            int(time.time()) + 60,
+            int(time.time()) + 3600,
             False,
             None,
             None,
@@ -399,6 +402,8 @@ def run(
     token.add_argument("--redirect", required=True, help="the https://www.acdelcotds.com/#code=... URL")
     sps = sub.add_parser("sps", help="save the SPS Info catalog for one VIN")
     sps.add_argument("--vin", required=True, help="17-character VIN")
+    launch = sub.add_parser("launch", help="save the Techline Connect launcher token for one subscription slot")
+    launch.add_argument("--slot", required=True, help="subscription slot id")
     args = parser.parse_args(list(argv))
     try:
         settings = load_settings(pathlib.Path(args.env))
@@ -484,6 +489,15 @@ def run(
                 challenge = parse_challenge(payload)
             result = submit_code(settings, challenge, reader, exchange)
             print(f"verification state: {result.get('state')}")
+            return 0
+        if args.command == "launch":
+            if not settings.access_token:
+                raise SessionExpiredError("there is no saved session")
+            browser = launcher_browser_bearer(settings, args.slot, exchange)
+            pair = child_token(settings, browser, exchange, "tum2")
+            path = session_path(settings)
+            write_launcher_tokens(path, pair.access_token, pair.refresh_token)
+            print(f"wrote the launcher token to {path}")
             return 0
         if args.command == "sps":
             check_vin(args.vin)

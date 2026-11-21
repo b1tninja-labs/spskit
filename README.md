@@ -19,6 +19,7 @@ python -m spskit download --id 25
 python -m spskit downloads
 python -m spskit downloads --get
 python -m spskit sps --vin <VIN>
+python -m spskit launch --slot <id>
 ```
 
 `spskit downloads` lists every file version the signed-in license can see. `spskit downloads --get`
@@ -26,6 +27,9 @@ stores each one under `SPS_DOWNLOAD_DIR/cache/{id}/{version}/` and skips a file 
 there. Add `--refresh` to fetch it again.
 
 `spskit sps --vin` writes that vehicle's module catalog to `spsinfo.sqlite` in the download directory.
+`spskit launch --slot` posts the Techline Connect handoff for that subscription slot and writes the
+launcher token into the session file. It does not print the token, and it leaves the sign-in access
+token in place.
 `vit1.programming_data_request()` builds the programming-data body for the method-128 reads on
 this VIN from a saved module read and returns it.
 
