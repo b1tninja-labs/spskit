@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "spskit"
 dynamic = ["version"]
-description = "Download the SPS2 service-programming modules an ACDelco TDS subscription is licensed for. The person supplies credentials in a local env file and types a verification code when the session expires."
+description = "Build the GM SPS2 programming request: the VIT1 getProgrammingData body and the J2534 wrapper connect string. The TDS/Techline Connect client (sign-in, downloads, SPS Info) is techlinekit; the dongle is vcxtoolkit."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"
@@ -23,13 +23,12 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
+# techlinekit is a workspace sibling (D:\code\techlinekit), not yet published; it is put on the
+# import path by pytest `pythonpath` and mypy `mypy_path` below rather than resolved from PyPI.
 dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "mypy"]
-
-[project.scripts]
-spskit = "spskit.cli:main"
 
 [tool.hatch.version]
 path = "spskit/__init__.py"
@@ -42,7 +41,7 @@ include = ["/spskit/", "/tests/", "/docs/", "/README.md", "/ROADMAP.md", "/PLAN.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "../techlinekit"]
 addopts = "-ra"
 
 [tool.ruff]
@@ -64,6 +63,7 @@ indent-style = "space"
 python_version = "3.12"
 strict = true
 warn_unused_ignores = true
+mypy_path = "../techlinekit"
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]
