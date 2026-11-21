@@ -135,6 +135,19 @@ non-empty. Otherwise a pre-programming instruction list returns
 1024 returns `reconfiguration.bsc.is.not.supported.yet`. `SoftPart` is not decompiled, so
 the part lists that function builds are not built here.
 
+`calibration_selection_needed()` is the check that opens calibration selection. It returns
+true for `type` `VCI` when `partsToInstall` or `displayablePartsToInstall` is missing or
+empty and `listOfModules` is non-empty. A GME adapter, an empty sequence list, and an
+all-device-253 list return false. Any other `type` raises. `Archive` is a class in the
+client, and its JSON type string is not decompiled. `VCI.isValid` is still not decompiled,
+so hardware selection stays undecided.
+
+`sequence_reprogramming()` names the task `handleSequenceReprogramming` would start and
+does not start it. An unskipped sequence with an empty `programmingDataUnits` list and a
+non-empty `partsToInstall` list returns `DOWNLOAD_PROG_FILES_TASK`. A pure MCVM sequence,
+`mcvmProgramming` set and no modules, returns `CHARACTERIZE_DATA_TASK`. A null method
+returns `ToolLock.unlock`.
+
 ## Where the bytes go
 
 `CalDownloadService.downloadFiles` sums the blob sizes, then branches on the event rather than on

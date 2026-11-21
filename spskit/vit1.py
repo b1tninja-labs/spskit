@@ -462,6 +462,114 @@ def after_calibration_selection(
     return "reconfiguration.bsc.is.not.supported.yet"
 
 
+def calibration_selection_needed(
+    sequences: Sequence[Mapping[str, object]],
+    *,
+    gme: bool,
+) -> bool:
+    """``calSelectionNeeded`` for programming data whose ``type`` is ``VCI``.
+
+    A GME adapter returns false. So does an empty list or a list whose devices
+    are all 253: ``allMatch`` on an empty stream is true. A ``type`` other than
+    ``VCI`` raises. ``Archive`` is a programming-data class and its JSON type
+    string is not in the decompiled sources. A VCI sequence returns true when
+    ``partsToInstall`` or ``displayablePartsToInstall`` is missing or empty and
+    ``listOfModules`` is a non-empty list. A null module list is not empty: the
+    client calls ``isEmpty`` on it.
+    """
+    if not isinstance(gme, bool):
+        raise Vit1Error("gme is not a boolean")
+    if gme:
+        return False
+    documents = [_document(sequence, "controller") for sequence in sequences]
+    if _all_device_253(documents):
+        return False
+    for document in documents:
+        data = document.get("programmingData")
+        if not isinstance(data, dict) or data.get("type") != "VCI":
+            raise Vit1Error("programmingData type is not VCI")
+        if _filled(document.get("partsToInstall"), "partsToInstall") and _filled(
+            document.get("displayablePartsToInstall"), "displayablePartsToInstall"
+        ):
+            continue
+        modules = data.get("listOfModules")
+        if not isinstance(modules, list):
+            raise Vit1Error("listOfModules is null")
+        if modules:
+            return True
+    return False
+
+
+def sequence_reprogramming(
+    sequences: Sequence[Mapping[str, object]],
+    *,
+    method_present: bool,
+    root: Mapping[str, object] | None = None,
+) -> str:
+    """The task ``handleSequenceReprogramming`` would start.
+
+    The function returns that task's name and does not download a calibration
+    or reprogram a controller. A missing ``skipped`` is false. A null
+    ``programmingDataUnits`` or ``partsToInstall`` raises, because the client
+    calls ``isEmpty`` on each. A null method unlocks the tool and starts no task.
+    """
+    if not isinstance(method_present, bool):
+        raise Vit1Error("method_present is not a boolean")
+    documents = [_document(sequence, "controller") for sequence in sequences]
+    if documents and not _pure_mcvm(documents[0]):
+        for document in documents:
+            if _is_skipped(document):
+                continue
+            units = document.get("programmingDataUnits")
+            parts = document.get("partsToInstall")
+            if not isinstance(units, list):
+                raise Vit1Error("programmingDataUnits is null")
+            if not isinstance(parts, list):
+                raise Vit1Error("partsToInstall is null")
+            if not units and parts:
+                return "DOWNLOAD_PROG_FILES_TASK"
+        return "REPROGRAM_VEHICLE_TASK"
+    if method_present and root is None:
+        raise Vit1Error("the root is null")
+    root_document = None if root is None else _document(root, "controller")
+    root_mcvm = root_document is not None and root_document.get("mcvmProgramming") is not None
+    if (method_present and root_mcvm) or (documents and _pure_mcvm(documents[0])):
+        return "CHARACTERIZE_DATA_TASK"
+    if method_present:
+        return "WARRANTY_CLAIM_TASK"
+    return "ToolLock.unlock"
+
+
+def _all_device_253(documents: list[dict[str, object]]) -> bool:
+    if not documents:
+        return True
+    for document in documents:
+        if type(document.get("deviceId")) is not int:
+            raise Vit1Error("controller deviceId is not an integer")
+    return all(document.get("deviceId") == 253 for document in documents)
+
+
+def _pure_mcvm(document: dict[str, object]) -> bool:
+    if document.get("mcvmProgramming") is None:
+        return False
+    data = document.get("programmingData")
+    if not isinstance(data, dict):
+        raise Vit1Error("the sequence has no programmingData")
+    modules = data.get("listOfModules")
+    if modules is None:
+        return True
+    if not isinstance(modules, list):
+        raise Vit1Error("listOfModules is not a list")
+    return not modules
+
+
+def _is_skipped(document: dict[str, object]) -> bool:
+    skipped = document.get("skipped", False)
+    if not isinstance(skipped, bool):
+        raise Vit1Error("skipped is not a boolean")
+    return skipped
+
+
 def _instruction_screen(
     current: Mapping[str, object] | None,
     root: Mapping[str, object] | None,

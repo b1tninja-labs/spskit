@@ -14,6 +14,7 @@ from spskit.vit1 import (
     after_programming_data,
     after_selected_controller,
     build_vit1,
+    calibration_selection_needed,
     decimal_partno,
     format1_text,
     format2_copy,
@@ -22,6 +23,7 @@ from spskit.vit1 import (
     normal_programming_data_loop,
     programming_data_request,
     programming_method_screen,
+    sequence_reprogramming,
     sequences_after_programming_data,
     vci_programming_data_request,
 )
@@ -464,6 +466,39 @@ def test_normal_methods_summarize_when_parts_are_displayable():
     assert after_calibration_selection(8, unauthored=False) == "reconfiguration.is.not.supported.yet"
     assert after_calibration_selection(1024, unauthored=False) == "reconfiguration.bsc.is.not.supported.yet"
     assert after_calibration_selection(0, unauthored=False) == "no.method.found"
+
+
+def test_vci_with_an_empty_part_list_needs_calibration_selection():
+    ready = {
+        "deviceId": 40,
+        "programmingData": {"type": "VCI", "listOfModules": [{"id": "1"}]},
+        "partsToInstall": [],
+        "displayablePartsToInstall": ["shown"],
+    }
+    assert calibration_selection_needed((ready,), gme=False) is True
+    filled = {**ready, "partsToInstall": ["installed"], "displayablePartsToInstall": ["shown"]}
+    assert calibration_selection_needed((filled,), gme=False) is False
+    assert calibration_selection_needed((ready,), gme=True) is False
+    assert calibration_selection_needed((), gme=False) is False
+    assert calibration_selection_needed(({"deviceId": 253},), gme=False) is False
+    with pytest.raises(Vit1Error, match="not VCI"):
+        calibration_selection_needed(
+            ({**ready, "programmingData": {"type": "Archive", "listOfModules": [{"id": "1"}]}},),
+            gme=False,
+        )
+
+
+def test_reprogramming_names_the_task_and_does_not_download():
+    waiting = {"programmingDataUnits": [], "partsToInstall": ["caller-part"], "programmingData": {"listOfModules": []}}
+    assert sequence_reprogramming((waiting,), method_present=True, root={"deviceId": 40}) == "DOWNLOAD_PROG_FILES_TASK"
+    skipped = {**waiting, "skipped": True}
+    assert sequence_reprogramming((skipped,), method_present=True, root={"deviceId": 40}) == "REPROGRAM_VEHICLE_TASK"
+    pure = {"mcvmProgramming": {"caller": "step"}, "programmingData": {"listOfModules": []}}
+    assert sequence_reprogramming((pure,), method_present=True, root={"deviceId": 40}) == "CHARACTERIZE_DATA_TASK"
+    assert sequence_reprogramming((), method_present=True, root={"deviceId": 40}) == "WARRANTY_CLAIM_TASK"
+    assert sequence_reprogramming((), method_present=False) == "ToolLock.unlock"
+    with pytest.raises(Vit1Error, match="programmingDataUnits is null"):
+        sequence_reprogramming(({"partsToInstall": ["caller-part"]},), method_present=True, root={"deviceId": 40})
 
 
 def test_method_2_is_the_vci_body_and_does_not_invent_steps():

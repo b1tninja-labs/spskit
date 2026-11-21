@@ -41,7 +41,9 @@ own ACDelco TDS subscription is licensed for.
   continue. File and reconfigure stop. `after_calibration_selection()` is the later
   switch: methods 1 and 128 open the summary when a module list and a displayable part
   list are both filled, and otherwise stop at instructions or name reprogramming
-  without downloading. K73's format-2
+  without downloading. `calibration_selection_needed()` is true for `type` `VCI` when a
+  part list is empty and `listOfModules` is not. `sequence_reprogramming()` names the
+  next task, including a calibration download, and does not start it. K73's format-2
   hardware is not paired,
   and neither is K16's `P;C0,C1,C2` part text.
 - `spskit login` posts the password and asks the host to email a code. It writes the challenge to the

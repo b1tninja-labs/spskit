@@ -92,6 +92,8 @@ until a real read is on disk.
 | `sk.vit1.modules` | `vit1.normal_programming_data_loop()` raises for unauthored id 10 and for an empty module list that still has a partno | handleNormalAfterProgrammingData | `[ok]` | `tests/test_vit1.py::test_an_empty_module_list_with_a_partno_stops_before_a_security_screen` |
 | `sk.vit1.method` | `vit1.programming_method_screen()` continues the ten programming methods and refuses file and reconfigure | ProgrammingMethodId and handleNormalAfterProgrammingData | `[ok]` | `tests/test_vit1.py::test_file_and_reconfigure_stop_and_the_vin_methods_continue` |
 | `sk.vit1.summary` | `vit1.after_calibration_selection()` chooses the summary, the instruction screen, or names reprogramming without downloading | handleNextScreenAfterCalibrationSelection | `[ok]` | `tests/test_vit1.py::test_normal_methods_summarize_when_parts_are_displayable` |
+| `sk.vit1.calselect` | `vit1.calibration_selection_needed()` is true for VCI data when a part list is empty and modules are not | calSelectionNeeded | `[ok]` | `tests/test_vit1.py::test_vci_with_an_empty_part_list_needs_calibration_selection` |
+| `sk.vit1.reprogram` | `vit1.sequence_reprogramming()` names the next task and does not download or reprogram | handleSequenceReprogramming | `[ok]` | `tests/test_vit1.py::test_reprogramming_names_the_task_and_does_not_download` |
 | `sk.vit1.format12` | `vit1.format1_text()` and `vit1.format2_copy()` read the other two GMLAN formats | spsvcs FUN_10015d80 | `[ok]` | `tests/test_vit1.py::test_format1_is_two_characters_per_byte_and_format2_is_the_slice` |
 
 ### Not this slice
