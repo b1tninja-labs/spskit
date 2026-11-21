@@ -22,6 +22,7 @@ from spskit.vit1 import (
     module_attributes,
     needs_vit1,
     normal_programming_data_loop,
+    pre_communication_messages,
     programming_data_request,
     programming_method_screen,
     sequence_reprogramming,
@@ -516,6 +517,17 @@ def test_a_headerless_vit1_still_needs_the_read():
     child = {"deviceId": 17}
     assert needs_vit1({"deviceId": 252, "mapOfControllers": {"K20": child}}) is True
     assert needs_vit1({"deviceId": 252, "mapOfControllers": {}}) is False
+
+
+def test_a_pre_communication_list_opens_that_screen():
+    assert pre_communication_messages({"deviceId": 40}) is None
+    assert pre_communication_messages({"deviceId": 40, "preCommunicationMessages": []}) is None
+    messages = pre_communication_messages(
+        {"deviceId": 203, "secCodeRequired": True, "preCommunicationMessages": ["close the hood"]}
+    )
+    assert messages == ["close the hood"]
+    with pytest.raises(Vit1Error, match="not a list"):
+        pre_communication_messages({"preCommunicationMessages": "close the hood"})
 
 
 def test_method_2_is_the_vci_body_and_does_not_invent_steps():

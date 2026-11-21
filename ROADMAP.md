@@ -95,6 +95,7 @@ until a real read is on disk.
 | `sk.vit1.calselect` | `vit1.calibration_selection_needed()` is true for VCI data when a part list is empty and modules are not | calSelectionNeeded | `[ok]` | `tests/test_vit1.py::test_vci_with_an_empty_part_list_needs_calibration_selection` |
 | `sk.vit1.reprogram` | `vit1.sequence_reprogramming()` names the next task and does not download or reprogram | handleSequenceReprogramming | `[ok]` | `tests/test_vit1.py::test_reprogramming_names_the_task_and_does_not_download` |
 | `sk.vit1.needs` | `vit1.needs_vit1()` reads a device other than 252 when the header vitAttrs is empty, and blocks on cmbs do not count | needsVIT1 and VIT.isEmpty | `[ok]` | `tests/test_vit1.py::test_a_headerless_vit1_still_needs_the_read` |
+| `sk.vit1.precom` | `vit1.pre_communication_messages()` returns the root list that opens the pre-communication screen | preCommunicationInstructionsNeeded | `[ok]` | `tests/test_vit1.py::test_a_pre_communication_list_opens_that_screen` |
 | `sk.vit1.format12` | `vit1.format1_text()` and `vit1.format2_copy()` read the other two GMLAN formats | spsvcs FUN_10015d80 | `[ok]` | `tests/test_vit1.py::test_format1_is_two_characters_per_byte_and_format2_is_the_slice` |
 
 ### Not this slice

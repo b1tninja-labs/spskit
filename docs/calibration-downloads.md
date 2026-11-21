@@ -153,6 +153,11 @@ the header `vitAttrs` list, so a document whose pairs sit on `cmbs` still needs 
 read. Device 252 is not read itself. A missing `mapOfControllers` raises when the
 header check does not already return, because the client calls `entrySet` on that map.
 
+`pre_communication_messages()` is the next screen after the security-code checks, which
+this function does not decide. A non-empty `preCommunicationMessages` list on the root
+opens `PRE_PROGRAMMING_INSTRUCTIONS`. On this VIN that list is non-empty for K114B only.
+An empty or missing list does not open the screen.
+
 ## Where the bytes go
 
 `CalDownloadService.downloadFiles` sums the blob sizes, then branches on the event rather than on

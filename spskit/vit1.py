@@ -308,6 +308,26 @@ def _header_empty(vit1: object) -> bool:
     return not attrs
 
 
+def pre_communication_messages(controller: Mapping[str, object]) -> list[object] | None:
+    """The root messages that open the pre-communication screen.
+
+    ``preCommunicationInstructionsNeeded`` is this list on the root. A missing
+    or empty list returns ``None``. A null or empty list is empty:
+    ``isEmptyCollection`` is not decompiled. The client checks security codes
+    before this screen, and this function does not. A non-empty list is what
+    opens ``PRE_PROGRAMMING_INSTRUCTIONS`` with ``PreMessage.PRE_COMMUNICATION``.
+    """
+    document = _document(controller, "controller")
+    raw = document.get("preCommunicationMessages")
+    if raw is None:
+        return None
+    if not isinstance(raw, list):
+        raise Vit1Error("preCommunicationMessages is not a list")
+    if not raw:
+        return None
+    return raw
+
+
 def programming_data_request(
     *,
     client_state: Mapping[str, object],
