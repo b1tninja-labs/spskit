@@ -118,6 +118,12 @@ whose `id` is 10 raises the unauthored-data error. An empty `listOfModules` rais
 first control-module block is missing or has a `partno`. A first block with no `partno` does
 not.
 
+`programming_method_screen()` is the switch under that loop, after the security-code and
+keycode returns, which this function does not decide. Methods 1, 2, 16, 32, 64, 128, 256,
+2048, 4096, and 8192 call `loadAfterProgrammingDataRetrieval`. Ids 4 and 512 return
+`file.is.not.supported`. Ids 8 and 1024 return `reconfiguration.is.not.supported.yet`.
+Any other id returns `no.valid.programming.method.found`.
+
 ## Where the bytes go
 
 `CalDownloadService.downloadFiles` sums the blob sizes, then branches on the event rather than on

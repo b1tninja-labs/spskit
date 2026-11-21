@@ -36,7 +36,9 @@ own ACDelco TDS subscription is licensed for.
   `sequences_after_programming_data()` is the list checked for `programmingData` before
   a security screen. A sequence with none raises `NO_CALIBRATIONS_SUPPORTED`.
   `normal_programming_data_loop()` then raises for programming-data id 10 and for an empty
-  module list whose first block has a `partno`. It does not read `keycode`. K73's format-2
+  module list whose first block has a `partno`. It does not read `keycode`.
+  `programming_method_screen()` is the switch under that loop. Methods 1, 2, 128, and 256
+  continue. File and reconfigure stop. K73's format-2
   hardware is not paired,
   and neither is K16's `P;C0,C1,C2` part text.
 - `spskit login` posts the password and asks the host to email a code. It writes the challenge to the

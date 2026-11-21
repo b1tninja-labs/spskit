@@ -20,6 +20,7 @@ from spskit.vit1 import (
     module_attributes,
     normal_programming_data_loop,
     programming_data_request,
+    programming_method_screen,
     sequences_after_programming_data,
     vci_programming_data_request,
 )
@@ -428,6 +429,18 @@ def test_an_empty_module_list_with_a_partno_stops_before_a_security_screen():
     normal_programming_data_loop((unauthored,), root=noted)
     held = {**sequence, "mcvmProgramming": {"caller": "step"}}
     normal_programming_data_loop((held,), root=root)
+
+
+def test_file_and_reconfigure_stop_and_the_vin_methods_continue():
+    for method_id in (1, 2, 16, 32, 64, 128, 256, 2048, 4096, 8192):
+        assert programming_method_screen(method_id) is None
+    assert programming_method_screen(4) == "file.is.not.supported"
+    assert programming_method_screen(512) == "file.is.not.supported"
+    assert programming_method_screen(8) == "reconfiguration.is.not.supported.yet"
+    assert programming_method_screen(1024) == "reconfiguration.is.not.supported.yet"
+    assert programming_method_screen(0) == "no.valid.programming.method.found"
+    with pytest.raises(Vit1Error, match="not an integer"):
+        programming_method_screen(True)  # type: ignore[arg-type]
 
 
 def test_method_2_is_the_vci_body_and_does_not_invent_steps():

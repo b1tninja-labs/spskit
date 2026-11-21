@@ -395,6 +395,32 @@ def normal_programming_data_loop(
         raise Vit1Error("No modules found in programming data")
 
 
+_PROGRAMMING_METHOD_CONTINUES = frozenset({1, 2, 16, 32, 64, 128, 256, 2048, 4096, 8192})
+_PROGRAMMING_METHOD_FILE = frozenset({4, 512})
+_PROGRAMMING_METHOD_RECONFIGURE = frozenset({8, 1024})
+
+
+def programming_method_screen(method_id: int) -> str | None:
+    """The method switch at the end of ``handleNormalAfterProgrammingData``.
+
+    ``None`` is cases 1 through 10, which call ``loadAfterProgrammingDataRetrieval``.
+    The security-code and keycode returns above that switch are not decided here.
+    ``ProgrammingMethodId.valueOf`` returns null for an id that is not one of the
+    fourteen values, and a null method uses the same message. File ids 4 and 512
+    share ``file.is.not.supported``. Reconfigure ids 8 and 1024 share
+    ``reconfiguration.is.not.supported.yet``.
+    """
+    if type(method_id) is not int:
+        raise Vit1Error("method id is not an integer")
+    if method_id in _PROGRAMMING_METHOD_CONTINUES:
+        return None
+    if method_id in _PROGRAMMING_METHOD_FILE:
+        return "file.is.not.supported"
+    if method_id in _PROGRAMMING_METHOD_RECONFIGURE:
+        return "reconfiguration.is.not.supported.yet"
+    return "no.valid.programming.method.found"
+
+
 def _has_pre_programming_instructions(document: dict[str, object]) -> bool:
     raw = document.get("preProgrammingInstructions")
     if raw is None:
