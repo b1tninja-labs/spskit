@@ -10,6 +10,7 @@ from spskit.vit1 import (
     SELECTED_CONTROLLER_PATH,
     VCI_PROGRAMMING_DATA_PATH,
     Vit1Error,
+    after_calibration_selection,
     after_programming_data,
     after_selected_controller,
     build_vit1,
@@ -441,6 +442,28 @@ def test_file_and_reconfigure_stop_and_the_vin_methods_continue():
     assert programming_method_screen(0) == "no.valid.programming.method.found"
     with pytest.raises(Vit1Error, match="not an integer"):
         programming_method_screen(True)  # type: ignore[arg-type]
+
+
+def test_normal_methods_summarize_when_parts_are_displayable():
+    modules = {"programmingData": {"listOfModules": [{"id": "1"}]}, "displayablePartsToInstall": ["shown"]}
+    assert after_calibration_selection(1, unauthored=False, sequences=(modules,)) == "CALIBRATION_SUMMARY"
+    assert after_calibration_selection(128, unauthored=False, sequences=(modules,)) == "CALIBRATION_SUMMARY"
+    empty = {"programmingData": {"listOfModules": []}, "displayablePartsToInstall": []}
+    assert after_calibration_selection(128, unauthored=False, sequences=(empty,)) == "handleSequenceReprogramming"
+    noted = {"preProgrammingInstructions": ["setup is required"]}
+    assert (
+        after_calibration_selection(1, unauthored=False, sequences=(empty,), root=noted)
+        == "PRE_PROGRAMMING_INSTRUCTIONS"
+    )
+    assert after_calibration_selection(128, unauthored=True, sequences=(empty,)) == "sps.exception.no-valid-cop"
+    assert after_calibration_selection(2, unauthored=False) == "CALIBRATION_SUMMARY"
+    assert after_calibration_selection(16, unauthored=False) == "LOAD_USB_DRIVES_TASK"
+    assert after_calibration_selection(64, unauthored=False) == "mcvm.is.not.supported"
+    assert after_calibration_selection(4, unauthored=False) == "file.is.not.supported"
+    assert after_calibration_selection(512, unauthored=False) == "file.bsc.is.not.supported"
+    assert after_calibration_selection(8, unauthored=False) == "reconfiguration.is.not.supported.yet"
+    assert after_calibration_selection(1024, unauthored=False) == "reconfiguration.bsc.is.not.supported.yet"
+    assert after_calibration_selection(0, unauthored=False) == "no.method.found"
 
 
 def test_method_2_is_the_vci_body_and_does_not_invent_steps():

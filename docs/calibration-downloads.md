@@ -124,6 +124,17 @@ keycode returns, which this function does not decide. Methods 1, 2, 16, 32, 64, 
 `file.is.not.supported`. Ids 8 and 1024 return `reconfiguration.is.not.supported.yet`.
 Any other id returns `no.valid.programming.method.found`.
 
+`after_calibration_selection()` is `handleNextScreenAfterCalibrationSelection`. Hardware
+dependency is not decided here, because `VCI.isValid` is not decompiled. Methods 1 and 128
+return `CALIBRATION_SUMMARY` when `listOfModules` and `displayablePartsToInstall` are both
+non-empty. Otherwise a pre-programming instruction list returns
+`PRE_PROGRAMMING_INSTRUCTIONS`, an unauthored sequence with no instructions returns
+`sps.exception.no-valid-cop`, and the remaining normal case returns
+`handleSequenceReprogramming` without entering it. Methods 2 and 256 return
+`CALIBRATION_SUMMARY`. File id 512 returns `file.bsc.is.not.supported`, and reconfigure id
+1024 returns `reconfiguration.bsc.is.not.supported.yet`. `SoftPart` is not decompiled, so
+the part lists that function builds are not built here.
+
 ## Where the bytes go
 
 `CalDownloadService.downloadFiles` sums the blob sizes, then branches on the event rather than on

@@ -421,6 +421,85 @@ def programming_method_screen(method_id: int) -> str | None:
     return "no.valid.programming.method.found"
 
 
+def after_calibration_selection(
+    method_id: int,
+    *,
+    unauthored: bool,
+    sequences: Sequence[Mapping[str, object]] = (),
+    current: Mapping[str, object] | None = None,
+    root: Mapping[str, object] | None = None,
+) -> str:
+    """The switch in ``handleNextScreenAfterCalibrationSelection``.
+
+    Reached when hardware selection and calibration selection were not opened.
+    ``prepareSoftPartData`` is not reproduced: ``SoftPart`` is not decompiled.
+    ``handleSequenceReprogramming`` is named and not entered, so no calibration
+    is downloaded. The current view is taken to be something other than the
+    pre-programming instruction screen, which is the call from this path.
+    """
+    if type(method_id) is not int or not isinstance(unauthored, bool):
+        raise Vit1Error("method id or unauthored flag is not the expected type")
+    if method_id not in _PROGRAMMING_METHOD_CONTINUES | _PROGRAMMING_METHOD_FILE | _PROGRAMMING_METHOD_RECONFIGURE:
+        return "no.method.found"
+    if method_id in {2, 256}:
+        return "CALIBRATION_SUMMARY"
+    if method_id in {16, 32, 2048, 4096}:
+        if not unauthored:
+            return "LOAD_USB_DRIVES_TASK"
+        return _instruction_screen(current, root, unauthored=True)
+    if method_id in {64, 8192}:
+        return "mcvm.is.not.supported"
+    if method_id in {1, 128}:
+        if _calibration_summary_needed(sequences):
+            return "CALIBRATION_SUMMARY"
+        return _instruction_screen(current, root, unauthored=unauthored)
+    if method_id == 4:
+        return "file.is.not.supported"
+    if method_id == 512:
+        return "file.bsc.is.not.supported"
+    if method_id == 8:
+        return "reconfiguration.is.not.supported.yet"
+    return "reconfiguration.bsc.is.not.supported.yet"
+
+
+def _instruction_screen(
+    current: Mapping[str, object] | None,
+    root: Mapping[str, object] | None,
+    *,
+    unauthored: bool,
+) -> str:
+    current_document = None if current is None else _document(current, "controller")
+    root_document = None if root is None else _document(root, "controller")
+    if current_document is not None and _has_pre_programming_instructions(current_document):
+        return "PRE_PROGRAMMING_INSTRUCTIONS"
+    if root_document is not None and _has_pre_programming_instructions(root_document):
+        return "PRE_PROGRAMMING_INSTRUCTIONS"
+    if unauthored:
+        return "sps.exception.no-valid-cop"
+    return "handleSequenceReprogramming"
+
+
+def _calibration_summary_needed(sequences: Sequence[Mapping[str, object]]) -> bool:
+    for sequence in sequences:
+        document = _document(sequence, "controller")
+        data = document.get("programmingData")
+        if not isinstance(data, dict):
+            raise Vit1Error("the sequence has no programmingData")
+        if _filled(data.get("listOfModules"), "listOfModules") and _filled(
+            document.get("displayablePartsToInstall"), "displayablePartsToInstall"
+        ):
+            return True
+    return False
+
+
+def _filled(value: object, label: str) -> bool:
+    if value is None:
+        return False
+    if not isinstance(value, list):
+        raise Vit1Error(f"{label} is not a list")
+    return bool(value)
+
+
 def _has_pre_programming_instructions(document: dict[str, object]) -> bool:
     raw = document.get("preProgrammingInstructions")
     if raw is None:

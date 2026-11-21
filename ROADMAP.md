@@ -91,6 +91,7 @@ until a real read is on disk.
 | `sk.vit1.sequences` | `vit1.sequences_after_programming_data()` lists the sequences checked for programmingData and raises when one has none | buildPSList and handleNextScreenAfterProgrammingDataRetrieval | `[ok]` | `tests/test_vit1.py::test_a_sequence_without_programming_data_stops_before_a_security_screen` |
 | `sk.vit1.modules` | `vit1.normal_programming_data_loop()` raises for unauthored id 10 and for an empty module list that still has a partno | handleNormalAfterProgrammingData | `[ok]` | `tests/test_vit1.py::test_an_empty_module_list_with_a_partno_stops_before_a_security_screen` |
 | `sk.vit1.method` | `vit1.programming_method_screen()` continues the ten programming methods and refuses file and reconfigure | ProgrammingMethodId and handleNormalAfterProgrammingData | `[ok]` | `tests/test_vit1.py::test_file_and_reconfigure_stop_and_the_vin_methods_continue` |
+| `sk.vit1.summary` | `vit1.after_calibration_selection()` chooses the summary, the instruction screen, or names reprogramming without downloading | handleNextScreenAfterCalibrationSelection | `[ok]` | `tests/test_vit1.py::test_normal_methods_summarize_when_parts_are_displayable` |
 | `sk.vit1.format12` | `vit1.format1_text()` and `vit1.format2_copy()` read the other two GMLAN formats | spsvcs FUN_10015d80 | `[ok]` | `tests/test_vit1.py::test_format1_is_two_characters_per_byte_and_format2_is_the_slice` |
 
 ### Not this slice
