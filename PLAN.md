@@ -52,6 +52,13 @@ own ACDelco TDS subscription is licensed for.
   pre-communication screen. An empty list does not. K73's format-2
   hardware is not paired,
   and neither is K16's `P;C0,C1,C2` part text.
+- `spskit-vit1` (`handoff.py`) is the offline voltkit→spskit handoff. It reads one ecu block of a
+  `voltkit profile --clone` file (`ecu`/`did`/`lid` text), takes a VIN and a controller code, and maps
+  the captured `lid` reads onto `vit1.module_attributes()`, then prints the VIT1 control-module block
+  from `vit1.build_vit1()`. With `--template` it attaches that read to a `getProgrammingData` body the
+  catalog supplies, through `vit1.programming_data_request()` or `vci_programming_data_request()`. It
+  does not import voltkit, open a socket, post to TDS, or program a vehicle. K16 and K73 request methods
+  520 and 566 have no saved-read rule, so `vit1.read_shape()` refuses them; K73 method 601 stays the rule.
 - `spskit login` posts the password and asks the host to email a code. It writes the challenge to the
   session file and does not write the code. `spskit code` reads that challenge, waits for the code, and
   writes the access token from the redirect. A dropped connection retries, and `spskit code` can be

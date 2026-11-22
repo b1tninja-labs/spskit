@@ -103,6 +103,53 @@ class Vit1Error(ValueError):
     """A module read cannot be attached to the programming-data request."""
 
 
+@dataclass(frozen=True, slots=True)
+class ReadShape:
+    """What one saved-read rule pulls from a module read.
+
+    These are the facts a caller needs to map a captured read onto
+    ``module_attributes`` without reaching into the private rule table. A
+    numeric ``hardware_did`` with ``hardware_decimal`` is the format-0, length-4,
+    start-1 slice; K17's hardware length is 0, so its ``ssecuhn`` stays a string.
+    """
+
+    code: str
+    device_id: int
+    request_method: int
+    part_dids: tuple[str, ...]
+    hardware_did: str | None
+    hardware_decimal: bool
+    reads_vin: bool
+    reads_cvn: bool
+
+
+def read_shape(code: str) -> ReadShape:
+    """The saved-read shape for one controller code.
+
+    Raises ``Vit1Error`` for a code with no saved-read rule, which includes the
+    deliberately refused controllers such as K16, and K73 request methods 520
+    and 566. K73 keeps method 601 as its saved-read rule.
+    """
+    rule = _BY_CODE.get(code)
+    if rule is None:
+        raise Vit1Error("this controller is not a saved-read rule")
+    return ReadShape(
+        rule.code,
+        rule.device_id,
+        rule.request_method,
+        rule.part_dids,
+        rule.hardware_did,
+        rule.hardware_decimal,
+        rule.read_vin,
+        rule.cvn,
+    )
+
+
+def read_codes() -> tuple[str, ...]:
+    """Every controller code with a saved-read rule, in table order."""
+    return tuple(rule.code for rule in _RULES)
+
+
 def decimal_partno(payload: bytes) -> str:
     """Four bytes from byte 1 of a DID payload, printed in base 10.
 

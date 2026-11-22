@@ -113,6 +113,9 @@ flags stay unread.
 | `sk.vit1.format12` | `vit1.format1_text()` and `vit1.format2_copy()` read the other two GMLAN formats | spsvcs FUN_10015d80 | `[ok]` | `tests/test_vit1.py::test_format1_is_two_characters_per_byte_and_format2_is_the_slice` |
 | `sk.vit1.k16` | `vit1.module_attributes()` refuses K16 | fixture `partAddresses` `P;C0,C1,C2`, length 0 | `[ok]` | `tests/test_vit1.py::test_method_1_reads_use_the_same_programming_data_body` |
 | `sk.vit1.k73` | `vit1.programming_data_request()` refuses K73 request method 520 | fixture hardware `81`, format 2, length 3; method 601 stays the saved-read rule | `[ok]` | `tests/test_vit1.py::test_the_other_method_128_reads_attach` |
+| `sk.handoff.read` | `handoff.vit1_from_read()` maps one ecu block of a voltkit `--clone` profile onto the VIT1 control-module block for a controller code | voltkit `capture.rs::clone_profile`; the voltkit→spskit handoff | `[ok]` | `tests/test_handoff.py::test_a_captured_k17_read_becomes_the_vit1_block` |
+| `sk.handoff.request` | `handoff.request_from_read()` attaches that read to a getProgrammingData template without inventing a catalog document | same capture; the controller's `vit1` is the only field it sets | `[ok]` | `tests/test_handoff.py::test_the_template_body_carries_the_attached_read` |
+| `sk.handoff.refuse` | `vit1.read_shape()` has no saved-read rule for K16 or K73 request methods 520 and 566, so the handoff refuses them | fixture `partAddresses` `P;C0,C1,C2`; K73 method 601 stays the rule | `[ok]` | `tests/test_handoff.py::test_k16_and_the_refused_k73_methods_have_no_rule` |
 
 ### Not this slice
 

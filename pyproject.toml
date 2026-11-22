@@ -30,6 +30,7 @@ dev = ["pytest", "ruff", "mypy"]
 
 [project.scripts]
 spskit = "spskit.cli:main"
+spskit-vit1 = "spskit.handoff:main"
 
 [tool.hatch.version]
 path = "spskit/__init__.py"
