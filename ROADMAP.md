@@ -66,10 +66,31 @@ refuses K16 and K73 request methods 520 and 566; K73 builds via method 601.
 | [ok] | `handoff::request_from_read` attaches the read to a catalog template and prints the whole request body | getProgrammingData / getVciProgrammingData bodies | `tests/handoff.rs` `the_template_body_carries_the_attached_read`, `the_vci_template_copies_the_step_lists` |
 | [ok] | the `spskit-vit1` binary reads a clone file and writes the VIT1 JSON offline, and reports a refused controller | the handoff CLI interface vcxtoolkit `collect` references | `tests/handoff.rs` `the_cli_writes_the_vit1_json`, `the_cli_reports_a_refused_controller` |
 
+## The GM J2534 proxy binding
+
+Techline Connect does not load a vendor J2534 DLL directly. `com.gm.sps.tool.jni.J2534DeviceImpl`
+reads `HKLM\SOFTWARE\Wow6432Node\GM\J2534Proxy` value `FunctionLibrary` and JNA-loads that GM proxy
+DLL as `J2534Wrapper_proxy`, whose `PassThruOpen` is a non-standard six-argument form gated by an
+allow list and a deny list (RE'd from `sps-nativelibs.jar`; see `docs/sources.md`). `proxy` holds
+that binding contract as safe logic — the device gate, the auto-accept open/close bookkeeping, the
+version report, the registry registration tuple, and the GM-exact programming constants — without
+exporting a C ABI, loading a DLL, or writing the registry. Building the native `cdylib` and the
+message path is `vcxtoolkit`'s, per `docs/tool-boundary.md`; this crate forbids `unsafe`.
+
+| Status | Obligation | Anchor | Test |
+|---|---|---|---|
+| [ok] | `proxy::parse_filter_list` parses the `name:vendor:api:flag` allow/deny grammar and refuses a bad entry or flag | `J2534Wrapper` `ALLOW_LIST`; sae-j2534-api-contract.md §8 | `src/proxy.rs` `a_malformed_entry_or_flag_is_refused`, `the_default_allow_list_parses_to_four_entries_ending_in_the_catch_all` |
+| [ok] | `proxy::ProxyState::accepts` gates a device through the default lists' `*:*:*:0` catch-all and a deny entry blocks it | `J2534DeviceImpl.openJ2534Device` allow/deny lists | `tests/proxy.rs` `the_default_allow_list_catch_all_selects_any_vcx`, `a_deny_entry_rejects_an_otherwise_allowed_device` |
+| [ok] | `proxy::ProxyState::open` is the six-arg GM `PassThruOpen` auto-accepting without a picker: `OPEN_OK` + recorded id, and `close` threads it | sae-j2534-api-contract.md §8 (6-arg PassThruOpen, 0/9999) | `tests/proxy.rs` `open_auto_accepts_without_a_picker_and_threads_the_device_id_through_close` |
+| [ok] | `proxy::ProxyState::read_version` reports API `04.04` only for an open device and refuses an oversize 256-byte buffer string | `J2534Wrapper.PassThruReadVersion` (256-byte buffers) | `tests/proxy.rs` `read_version_reports_04_04_only_once_a_device_is_open`, `a_version_string_longer_than_the_buffer_is_refused` |
+| [ok] | `proxy::registration` builds the `HKLM\SOFTWARE\Wow6432Node\GM\J2534Proxy` `FunctionLibrary` tuple and refuses an empty path | `J2534DeviceImpl.loadLibrary` registry read | `tests/proxy.rs` `registration_points_the_proxy_key_at_the_dll` |
+| [ok] | `proxy::gmlan` records the GM-exact programming constants (HS-GMLAN 500000, SW-CAN 33333/83333) and the ISO15765 timeout→STMIN=1ms adaptation | `tisvcsv4.dll`; sae-j2534-api-contract.md §9 | `tests/proxy.rs` `the_gm_programming_channel_values_match_the_re_d_constants` |
+
 ## Not this slice
 
 | Status | Obligation | Anchor | Test |
 |---|---|---|---|
 | [no] | sign-in, licensed downloads, SPS Info, and the Techline Connect launcher live in `techlinekit`, not here; this crate reproduces only VIN validation | project split | none: `docs/tool-boundary.md` |
 | [no] | do not program a controller, calculate a seed or key, or speak SAE J2534; the dongle and PassThruSupport.04.04 belong to vcxtoolkit | ISO 14229-1:2013 clause 15.4.4 | none: `docs/tool-boundary.md` |
+| [no] | the native proxy `cdylib` (the `extern "C"` exports, writing the registry, loading and delegating the message path to the VCX pass-through) is `vcxtoolkit`'s; this crate forbids `unsafe` and only holds the contract | unsafe FFI boundary; sae-j2534-api-contract.md §8 Division Suggestion | none: `docs/tool-boundary.md` |
 | [no] | security access and transfer of a calibration stay out of this crate | owner decision | none: same boundary as the volt research notes |
