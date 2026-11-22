@@ -21,7 +21,8 @@ import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from spskit.spsinfo import SpsInfoError
+from techlinekit.spsinfo import SpsInfoError
+
 from spskit.vit1 import (
     ReadShape,
     Vit1Error,
