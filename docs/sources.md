@@ -264,3 +264,27 @@ from memory.
 is never spelled out: it appears only as a bare field and class name in the decompiled client, the
 captures, and the RE JSON under `D:\data\spskit\re`. No expansion (e.g. "Vehicle Information Table")
 is attested in any source here, so none is asserted.
+
+## GM J2534 proxy binding
+
+RE'd 2026-11-22 from `sps-nativelibs.jar`: `com.gm.sps.tool.jni.J2534DeviceImpl`,
+`com.gm.sps.tool.jna.J2534Wrapper`, `j2534bridge.dll`, and the GM VCS DLL `tisvcsv4.dll`. The full
+analysis, with the ABI the native `cdylib` must expose, is the shared note `sae-j2534-api-contract.md`
+§8 (the GM proxy binding) and §9 (the GM-exact channel config). The shapes `src/proxy.rs` encodes:
+
+`J2534DeviceImpl.loadLibrary()` reads `HKLM\SOFTWARE\Wow6432Node\GM\J2534Proxy` value
+`FunctionLibrary` with `reg query` and `Native.load("J2534Wrapper_proxy", ...)` — a JNA load of that
+GM proxy DLL, not a vendor DLL under `PassThruSupport.04.04`. The proxy's `PassThruOpen` is the
+six-argument `(connectionString, *pDeviceID, *pSerialNumber, allowList, denyList, langId)` with
+`langId` 1033; it returns 0 on success (writing the device id and serial number), 9999 on a user
+cancel in its picker, else an error. `PassThruClose(DeviceID)` and
+`PassThruReadVersion(DeviceID, fw, dll, api)` use 256-byte buffers; the API is `04.04`. The device
+gate is the allow list `Ford-VCM-II:*:04.04:0;M-VCI:Bosch:04.04:1;*:Bosch:*:1;*:*:*:0;` (format
+`name:vendor:api:flag`, `;`-separated, `*` wildcard, trailing `*:*:*:0` a catch-all that accepts any
+device). The GM-exact programming values are baked in `tisvcsv4.dll`: HS-GMLAN `DATA_RATE` 500000
+(`0x7A120`), SW-CAN 33333 (`0x8235`) switching to 83333 (`0x14585`) for programming, and the
+ISO 15765 timeout adaptation (override STmin to 1 ms, re-send flow control, retry, tolerate
+mixed-format frames). None of this is a SAE clause — the proxy forms are 04.04/GM-proprietary, not in
+the imported 2002 edition — so none is asserted from the spec; it is read from the decompiled GM
+libraries. `src/proxy.rs` holds the contract as safe logic; the native `cdylib`, the registry write,
+and the message path are `vcxtoolkit`'s (`docs/tool-boundary.md`).
