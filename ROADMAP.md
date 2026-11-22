@@ -71,11 +71,25 @@ One VIN the subscription can open. The rows are the controller tree and the cali
 | `sk.sps.handoff` | `client.request_sps_form()` asks for the SPOREF page with the saved session | captured accessSPSCal request | `[ok]` | `tests/test_spsinfo.py::test_sps_prints_the_catalog_path_and_not_the_bearer` |
 | `sk.cli.sps` | `cli.run()` prints the catalog counts and the sqlite path and does not print the bearer | SPS Info viewer | `[ok]` | `tests/test_spsinfo.py::test_sps_prints_the_catalog_path_and_not_the_bearer` |
 
+### Techline Connect launch
+
+| Id | Obligation | Spec | Status | Evidence |
+|---|---|---|---|---|
+| `sk.launch.child` | `client.child_token()` asks for a child token with the browser bearer and keeps both token values | captured child token response | `[ok]` | `tests/test_launcher.py::test_the_child_token_call_keeps_only_the_token_values` |
+| `sk.launch.cli` | `cli.run()` writes that pair beside the saved session and does not print it | captured child token response | `[ok]` | `tests/test_launcher.py::test_launch_writes_the_child_token_and_does_not_print_it` |
+
 ### Programming data
 
-The body of `POST /sps/legacy/cloud/getProgrammingData` for K17, K33, K20, and K9. A saved module
-read supplies the VIT1 control-module block. The function returns that body. A live post waits
-until a real read is on disk.
+The body of `POST /sps/legacy/cloud/getProgrammingData`, and the screens that follow a response.
+A saved module read supplies the VIT1 control-module block from the fixture address lists: VIN
+`90` when that request method reads a VIN, one decimal `partno` per plain part identifier, and
+`ssecuhn` from the hardware identifier when the format is 0, the length is 4, and the start byte
+is 1. K17 keeps the hardware string because its length is 0. These functions return that body or
+the next screen. They do not post, and they do not download a calibration. Hardware selection
+stays undecided because `VCI.isValid` is not decompiled. K16 (`P;C0,C1,C2`, length 0) is refused.
+K73 request methods 520 and 566 (hardware `81`, format 2, length 3) stay unattached; method 601
+remains the saved-read rule. A live post waits until a real read is on disk. Request-method seed
+flags stay unread.
 
 | Id | Obligation | Spec | Status | Evidence |
 |---|---|---|---|---|
@@ -92,7 +106,13 @@ until a real read is on disk.
 | `sk.vit1.modules` | `vit1.normal_programming_data_loop()` raises for unauthored id 10 and for an empty module list that still has a partno | handleNormalAfterProgrammingData | `[ok]` | `tests/test_vit1.py::test_an_empty_module_list_with_a_partno_stops_before_a_security_screen` |
 | `sk.vit1.method` | `vit1.programming_method_screen()` continues the ten programming methods and refuses file and reconfigure | ProgrammingMethodId and handleNormalAfterProgrammingData | `[ok]` | `tests/test_vit1.py::test_file_and_reconfigure_stop_and_the_vin_methods_continue` |
 | `sk.vit1.summary` | `vit1.after_calibration_selection()` chooses the summary, the instruction screen, or names reprogramming without downloading | handleNextScreenAfterCalibrationSelection | `[ok]` | `tests/test_vit1.py::test_normal_methods_summarize_when_parts_are_displayable` |
+| `sk.vit1.calselect` | `vit1.calibration_selection_needed()` is true for VCI data when a part list is empty and modules are not | calSelectionNeeded | `[ok]` | `tests/test_vit1.py::test_vci_with_an_empty_part_list_needs_calibration_selection` |
+| `sk.vit1.reprogram` | `vit1.sequence_reprogramming()` names the next task and does not download or reprogram | handleSequenceReprogramming | `[ok]` | `tests/test_vit1.py::test_reprogramming_names_the_task_and_does_not_download` |
+| `sk.vit1.needs` | `vit1.needs_vit1()` reads a device other than 252 when the header vitAttrs is empty, and blocks on cmbs do not count | needsVIT1 and VIT.isEmpty | `[ok]` | `tests/test_vit1.py::test_a_headerless_vit1_still_needs_the_read` |
+| `sk.vit1.precom` | `vit1.pre_communication_messages()` returns the root list that opens the pre-communication screen | preCommunicationInstructionsNeeded | `[ok]` | `tests/test_vit1.py::test_a_pre_communication_list_opens_that_screen` |
 | `sk.vit1.format12` | `vit1.format1_text()` and `vit1.format2_copy()` read the other two GMLAN formats | spsvcs FUN_10015d80 | `[ok]` | `tests/test_vit1.py::test_format1_is_two_characters_per_byte_and_format2_is_the_slice` |
+| `sk.vit1.k16` | `vit1.module_attributes()` refuses K16 | fixture `partAddresses` `P;C0,C1,C2`, length 0 | `[ok]` | `tests/test_vit1.py::test_method_1_reads_use_the_same_programming_data_body` |
+| `sk.vit1.k73` | `vit1.programming_data_request()` refuses K73 request method 520 | fixture hardware `81`, format 2, length 3; method 601 stays the saved-read rule | `[ok]` | `tests/test_vit1.py::test_the_other_method_128_reads_attach` |
 
 ### Not this slice
 

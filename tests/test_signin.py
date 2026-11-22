@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 import urllib.parse
 
 import pytest
@@ -270,3 +271,20 @@ def test_a_refresh_replaces_the_access_token_and_a_new_refresh_token(tmp_path):
     saved = json.loads((tmp_path / "session.json").read_text(encoding="utf-8"))
     assert saved["refresh_token"] == "refresh-token-value-0002"
     assert "refresh-token-value-0002" not in repr(renewed)
+
+
+def test_a_refresh_is_skipped_while_the_access_token_is_still_valid(tmp_path):
+    settings = Settings(
+        username="person",
+        password="stored-password",
+        gateway="https://gateway.example",
+        ciam="https://ciam.example",
+        access_token=_jwt(int(time.time()) + 3600),
+        download_dir=tmp_path,
+        refresh_token="refresh-token-value-0001",
+    )
+
+    def exchange(*_args):
+        raise AssertionError("the token endpoint should not be called")
+
+    assert renew_access_token(settings, exchange) is settings

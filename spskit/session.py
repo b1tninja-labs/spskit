@@ -83,6 +83,14 @@ def _write_object(path: Path, payload: dict[str, object]) -> None:
     destination.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
 
+def write_launcher_tokens(path: Path, access_token: str, refresh_token: str) -> None:
+    """Store the Techline Connect launcher pair. The EEID access token stays as it was."""
+    payload = _read_object(path)
+    payload["launcher_access_token"] = accept_token(access_token)
+    payload["launcher_refresh_token"] = accept_token(refresh_token)
+    _write_object(path, payload)
+
+
 def write_session(
     path: Path,
     token: str,
