@@ -10,7 +10,7 @@ import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from spskit.spsinfo import SpsInfoError, check_vin
+from techlinekit.spsinfo import SpsInfoError, check_vin
 
 PROGRAMMING_DATA_PATH = "/sps/legacy/cloud/getProgrammingData"
 VCI_PROGRAMMING_DATA_PATH = "/sps/legacy/cloud/getVciProgrammingData"
