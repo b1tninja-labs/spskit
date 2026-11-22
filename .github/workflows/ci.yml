@@ -8,8 +8,54 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  lint:
+  check:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: spskit
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: spskit
+
+      # spskit depends on the sibling udskit crate by the path `../udskit`, the same layout the
+      # D:\code workspace uses locally. Check out udskit's default branch beside spskit so the path
+      # dependency resolves. Both repos are public, so the default token is enough.
+      - name: check out the udskit path dependency
+        uses: actions/checkout@v4
+        with:
+          repository: b1tninja-labs/udskit
+          path: udskit
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: fmt
+        if: runner.os == 'Linux'
+        run: cargo fmt --check
+
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: test
+        run: cargo test
+
+      - name: doc
+        run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  msrv:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -18,47 +64,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: spskit
-      # techlinekit is a workspace sibling, not a published dependency: spskit resolves it from
-      # ../techlinekit (pyproject `pythonpath`/`mypy_path`). Check it out beside spskit so CI has
-      # the same layout as a local D:\code checkout. The repo is public, so the default token reads it.
-      - uses: actions/checkout@v4
+      - name: check out the udskit path dependency
+        uses: actions/checkout@v4
         with:
-          repository: b1tninja-labs/techlinekit
-          path: techlinekit
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      # The same pins as projecthub/src/projecthub/shells/requirements-dev.txt. An unpinned
-      # `pip install ruff` makes the verdict follow whatever version the index serves that day.
-      - run: python -m pip install --quiet ruff==0.15.12 mypy==1.20.2 pytest==9.0.3
-      - run: python -m pip install --quiet --no-deps -e .
-      - run: python -m compileall -q spskit
-      - run: python -m ruff check spskit tests
-      - run: python -m ruff format --check spskit tests
-      - run: python -m mypy spskit
-
-  test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        python: ["3.12", "3.13", "3.14"]
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        working-directory: spskit
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          path: spskit
-      - uses: actions/checkout@v4
-        with:
-          repository: b1tninja-labs/techlinekit
-          path: techlinekit
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
-      - run: python -m pip install --quiet pytest==9.0.3
-      - run: python -m pip install --quiet --no-deps -e .
-      - run: python -m pytest -q
-      - run: python -O -m pytest -q
+          repository: b1tninja-labs/udskit
+          path: udskit
+      - uses: dtolnay/rust-toolchain@1.85
+      - run: cargo test

@@ -259,3 +259,8 @@ ISO 14229-1:2013 clause 15.4.4 (cited through `primarysource`) names SAE J2534 a
 between the application and the service-tool hardware, and says communication to the vehicle uses
 manufacturer-proprietary information. The SAE document is not imported. No pass-through API is written
 from memory.
+
+`VIT` (as in `VIT1`, `VIT1BuilderImpl`, `vitAttrs`, `VIT.isEmpty`, `VIT_NO_VALID_CMB`, `cvn_in_vit1`)
+is never spelled out: it appears only as a bare field and class name in the decompiled client, the
+captures, and the RE JSON under `D:\data\spskit\re`. No expansion (e.g. "Vehicle Information Table")
+is attested in any source here, so none is asserted.
