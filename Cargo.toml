@@ -1,0 +1,38 @@
+[package]
+name = "spskit"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Offline GM SPS2 programming request: the VIT1 getProgrammingData body and the GM J2534 wrapper connect string. Builds the request from a saved module read; it does not program a vehicle, post to TDS, or open a port."
+license = "Apache-2.0"
+readme = "README.md"
+publish = false # offline request-shaping library; not published
+
+# The VIT1 request body and every controller document it walks are JSON. serde_json is the
+# faithful counterpart of the Python original's `dict[str, object]` / `json.loads(json.dumps(...))`
+# model, and `preserve_order` keeps the output body's key order (clientState, spsVin, ...) the
+# captured posts use and the tests assert. No network or filesystem crate crosses this boundary.
+[dependencies]
+serde_json = { version = "1.0.145", features = ["preserve_order"] }
+# The shared UDS (ISO 14229-1) / GMLAN model. spskit reads one catalog for the `$7F`
+# negative-response marker and the `$1A` GMLAN ReadDataByIdentifier service id its format
+# decoders key on, instead of hand-rolling the service-framing constants beside udskit. Path
+# dependency on the sibling repo; no bus, no key material, no write service crosses this boundary.
+udskit = { path = "../udskit" }
+
+[[bin]]
+name = "spskit-vit1"
+path = "src/main.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# The prose carries GM/SPS terms (VIT1, ssecuhn, getProgrammingData, GMLAN) that doc_markdown
+# would want in backticks, and the request-shaping types echo their module. These pedantic lints
+# only add noise here, so they are allowed in the manifest rather than with scattered #![allow].
+module_name_repetitions = "allow"
+doc_markdown = "allow"
