@@ -11,8 +11,20 @@ permissions:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: spskit
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: spskit
+      # techlinekit is a workspace sibling, not a published dependency: spskit resolves it from
+      # ../techlinekit (pyproject `pythonpath`/`mypy_path`). Check it out beside spskit so CI has
+      # the same layout as a local D:\code checkout. The repo is public, so the default token reads it.
+      - uses: actions/checkout@v4
+        with:
+          repository: b1tninja-labs/techlinekit
+          path: techlinekit
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -32,8 +44,17 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         python: ["3.12", "3.13", "3.14"]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: spskit
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: spskit
+      - uses: actions/checkout@v4
+        with:
+          repository: b1tninja-labs/techlinekit
+          path: techlinekit
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
